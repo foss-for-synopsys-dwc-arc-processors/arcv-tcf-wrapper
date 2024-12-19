@@ -186,7 +186,9 @@ def print_tcf_help():
 
 def main():
     original_arguments = sys.argv.copy()[1:]
-    filtered_arguments = []
+    filtered_arguments_before = []
+    filtered_arguments_after = []
+    filtered_arguments_current = filtered_arguments_before
     tcf_filename = None
     tcf_options = []
     mabi_presented = False
@@ -196,6 +198,7 @@ def main():
     for arg in original_arguments:
         if arg.startswith('-tcf='):
             tcf_filename = arg.split('=', maxsplit=1)[1]
+            filtered_arguments_current = filtered_arguments_after
         elif arg == '-tcf-debug':
             logging.getLogger().setLevel(logging.DEBUG)
         elif arg == '-tcf-help':
@@ -206,7 +209,7 @@ def main():
                 mabi_presented = True
             elif arg.startswith('-mcmodel='):
                 mcmodel_presented = True
-            filtered_arguments.append(arg)
+            filtered_arguments_current.append(arg)
     
     if tcf_filename is not None:
         tcf = TCF(tcf_filename)
@@ -233,7 +236,7 @@ def main():
         logging.debug('path is not found, assume that GCC in PATH')
 
     # Call GCC binary with all arguments
-    subprocess_arguments = [binary_path, *tcf_options, *filtered_arguments]
+    subprocess_arguments = [binary_path, *filtered_arguments_before, *tcf_options, *filtered_arguments_after]
     print(' '.join(subprocess_arguments))
 
     exit_code = 0
