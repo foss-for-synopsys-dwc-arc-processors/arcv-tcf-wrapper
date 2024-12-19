@@ -107,15 +107,11 @@ class TCF:
             self._mabi += 'd'
         elif '_f' in self._march:
             self._mabi += 'f'
-        
-        self._compile_options_list.insert(1, '-mabi={}'.format(self._mabi))
 
         # Generate -mcmodel
         self._mcmodel = 'medlow'
         if 'rv64' in self._march:
             self._mcmodel = 'medany'
-        
-        self._compile_options_list.insert(1, '-mcmodel={}'.format(self._mcmodel))
 
         logging.debug('compile options extracted: %s', str(self._compile_options_list))
 
@@ -193,6 +189,8 @@ def main():
     filtered_arguments = []
     tcf_filename = None
     tcf_options = []
+    mabi_presented = False
+    mcmodel_presented = False
 
     # Parse arguments and find --tcf*=... options
     for arg in original_arguments:
@@ -204,11 +202,20 @@ def main():
             print_tcf_help()
             return 0
         else:
+            if arg.startswith('-mabi='):
+                mabi_presented = True
+            elif arg.startswith('-mcmodel='):
+                mcmodel_presented = True
             filtered_arguments.append(arg)
     
     if tcf_filename is not None:
         tcf = TCF(tcf_filename)
-        tcf_options = tcf.get_compile_options() + tcf.get_link_options()
+        tcf_options = tcf.get_compile_options()
+        if not mabi_presented:
+            tcf_options.append('-mabi={}'.format(tcf.get_mabi()))
+        if not mcmodel_presented:
+            tcf_options.append('-mcmodel={}'.format(tcf.get_mcmodel()))
+        tcf_options.extend(tcf.get_link_options())
 
     # Generate GCC binary name
     binary_name_prefix, binary_name_postfix = os.path.basename(__file__).split('-tcf-')
