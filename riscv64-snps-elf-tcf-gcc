@@ -1,0 +1,243 @@
+#!/usr/bin/env python3
+
+# Copyright (c) 2024-2025, Synopsys, Inc. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1) Redistributions of source code must retain the above copyright notice,
+# this list of conditions and the following disclaimer.
+#
+# 2) Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# 3) Neither the name of the Synopsys, Inc., nor the names of its contributors
+# may be used to endorse or promote products derived from this software
+# without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
+import sys
+import logging
+from typing import List
+import xml.etree.ElementTree as ET
+import subprocess
+import os
+
+logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.ERROR)
+
+class TCF:
+    def __init__(self, filename: str):
+        self._filename = filename
+        self._init_root_node()
+        self._init_compile_options()
+        self._init_link_options()
+
+    def _init_root_node(self):
+        try:
+            self._tree = ET.parse(self._filename)
+            logging.debug('opened TCF: %s', self._filename)
+        except FileNotFoundError:
+            logging.error('File "%s" is not found.', self._filename)
+            sys.exit(1)
+
+        self._root_node = self._tree.getroot()
+
+    def _init_compile_options(self):
+        # Extract compile options
+        options_node = self._root_node.find("./configuration[@name='gcc_compiler']/string")
+
+        if options_node is None:
+            logging.error('gcc_compiler configuration is not found.')
+            sys.exit(1)
+
+        self._compile_options_list = []
+        compile_options_list_raw = [option.strip() for option in options_node.text.split()]
+
+        # Generate -march and -mtune
+        self._march = None
+        self._mtune = ''
+        for option in compile_options_list_raw:
+            if '-march=' in option:
+                self._march = option.split('=')[1]
+                self._compile_options_list.append(option)
+            elif '-mtune=' in option:
+                self._mtune = option.split('=')[1]
+
+                # Fix deprecated -mtune values
+                if self._mtune == 'rmx100':
+                    self._mtune = 'arc-v-rmx-100-series'
+                elif self._mtune == 'rmx500':
+                    self._mtune = 'arc-v-rmx-500-series'
+                elif self._mtune == 'rhx':
+                    self._mtune = 'arc-v-rhx-100-series'
+
+                self._compile_options_list.append('-mtune={}'.format(self._mtune))
+            else:
+                self._compile_options_list.append(option)
+
+        if self._march is None:
+            logging.error('-march is not presented in TCF.')
+            sys.exit(1)
+
+        # Generate -mabi
+        self._mabi = None
+        if 'rv32i' in self._march:
+            self._mabi = 'ilp32'
+        elif 'rv32e' in self._march:
+            self._mabi = 'ilp32e'
+        elif 'rv64i' in self._march:
+            self._mabi = 'lp64'
+        else:
+            logging.error('cannot generate -mabi for -march=%s.', self._march)
+            sys.exit(1)
+        
+        if '_d' in self._march:
+            self._mabi += 'd'
+        elif '_f' in self._march:
+            self._mabi += 'f'
+        
+        self._compile_options_list.insert(1, '-mabi={}'.format(self._mabi))
+
+        # Generate -mcmodel
+        self._mcmodel = 'medlow'
+        if 'rv64' in self._march:
+            self._mcmodel = 'medany'
+        
+        self._compile_options_list.insert(1, '-mcmodel={}'.format(self._mcmodel))
+
+        logging.debug('compile options extracted: %s', str(self._compile_options_list))
+
+    def _init_link_options(self):
+        # Extract ICCM and DCCM configurations
+        self._link_options_list = []
+        nsim_node = self._root_node.find("./configuration[@name='nSIM']/string")
+
+        if nsim_node is None:
+            logging.error('nSIM configuration is not found.')
+            sys.exit(1)
+
+        nsim_options_map = {}
+        for nsim_option in nsim_node.text.split():
+            key, value = nsim_option.strip().split('=')
+            nsim_options_map[key] = value
+
+        self._iccm_base = nsim_options_map.get('iccm0_base', None)
+        if self._iccm_base is not None:
+            self._iccm_base_option = '-Wl,-defsym=txtmem_addr={}'.format(self._iccm_base)
+            self._link_options_list.append(self._iccm_base_option)
+
+        self._iccm_size = nsim_options_map.get('iccm0_size', None)
+        if self._iccm_size is not None:
+            self._iccm_size_options = '-Wl,-defsym=txtmem_len={}'.format(self._iccm_size)
+            self._link_options_list.append(self._iccm_size_options)
+
+        self._dccm_base = nsim_options_map.get('dccm_base', None)
+        if self._dccm_base is not None:
+            self._dccm_base_options = '-Wl,-defsym=datamem_addr={}'.format(self._dccm_base)
+            self._link_options_list.append(self._dccm_base_options)
+
+        self._dccm_size = nsim_options_map.get('dccm_size', None)
+        if self._dccm_size is not None:
+            self._dccm_size_options = '-Wl,-defsym=datamem_len={}'.format(self._dccm_size)
+            self._link_options_list.append(self._dccm_size_options)
+
+        logging.debug('link options extracted: %s', str(self._link_options_list))
+
+    def get_march(self) -> str:
+        return self._march
+    
+    def get_mabi(self) -> str:
+        return self._mabi
+    
+    def get_mtune(self) -> str:
+        return self._mtune
+    
+    def get_mcmodel(self) -> str:
+        return self._mcmodel
+    
+    def get_compile_options(self) -> List[str]:
+        return self._compile_options_list.copy()
+    
+    def get_link_options(self) -> List[str]:
+        return self._link_options_list.copy()
+
+_tcf_help = '''\
+Usage: riscv64-snps-elf-tcf-gcc [--tcf=<TCF path>] [--tcf-debug]
+                                [--tcf-help] [<GCC options>]
+
+Description of available options:
+
+    --tcf=<TCF path>    pass a path to a TCF file for parsing GCC options
+    --tcf-debug         enable printing of debug messages
+    --tcf-help          show this help message
+    <GCC options>       all other options a passed directly to GCC
+'''
+
+def print_tcf_help():
+    print(_tcf_help)
+
+def main():
+    original_arguments = sys.argv.copy()[1:]
+    filtered_arguments = []
+    tcf_filename = None
+    tcf_options = []
+
+    # Parse arguments and find --tcf*=... options
+    for arg in original_arguments:
+        if arg.startswith('--tcf='):
+            tcf_filename = arg.split('=', maxsplit=1)[1]
+        elif arg == '--tcf-debug':
+            logging.getLogger().setLevel(logging.DEBUG)
+        elif arg == '--tcf-help':
+            print_tcf_help()
+            return 0
+        else:
+            filtered_arguments.append(arg)
+    
+    if tcf_filename is not None:
+        tcf = TCF(tcf_filename)
+        tcf_options = tcf.get_compile_options() + tcf.get_link_options()
+
+    # Generate GCC binary name
+    binary_name_prefix, binary_name_postfix = os.path.basename(__file__).split('-tcf-')
+    binary_name = '{}-{}'.format(binary_name_prefix, binary_name_postfix)
+    logging.debug('binary name: %s', binary_name)
+
+    # Find the binary - whether it's in script's directory or in PATH?
+    script_directory = os.path.dirname(os.path.realpath(__file__))
+    binary_path = os.path.join(script_directory, binary_name)
+    logging.debug('trying to locate %s', binary_path)
+
+    # Try to use GCC from PATH
+    if not os.path.exists(binary_path):
+        binary_path = binary_name
+        logging.debug('path is not found, assume that GCC in PATH')
+
+    # Call GCC binary with all arguments
+    subprocess_arguments = [binary_path, *tcf_options, *filtered_arguments]
+    print(' '.join(subprocess_arguments))
+
+    exit_code = 0
+
+    try:
+        exit_code = subprocess.call(subprocess_arguments)
+    except FileNotFoundError:
+        logging.error('cannot find GCC binary: %s', binary_path)
+        exit_code = 1
+    
+    return exit_code
+
+if __name__ == '__main__':
+    sys.exit(main())
