@@ -14,15 +14,15 @@ The wrapper is tries to find `riscv64-snps-elf-gcc` in 2 places:
 
 ## Usage
 
-To pass TCF to the wrapper use `--tcf=...` option. Other options are passed
+To pass TCF to the wrapper use `-tcf=...` option. Other options are passed
 directly to GCC:
 
 ```
-$ riscv64-snps-elf-tcf-gcc --tcf=rmx100_base.tcf -specs=semihost.specs -specs=arcv.specs -T arcv.ld main.c -o main.elf
+$ riscv64-snps-elf-tcf-gcc -tcf=rmx100_base.tcf -specs=semihost.specs -specs=arcv.specs -T arcv.ld main.c -o main.elf
 riscv64-snps-elf-gcc -march=rv32i_zicsr_zifencei_zihintpause_c_m_zcb_zcmp_zcmt_zba_zbb_zbs_zicond_zicbom_zicbop -mcmodel=medlow -mabi=ilp32 -mtune=arc-v-rmx-100-series -Wl,-defsym=txtmem_addr=0x0 -Wl,-defsym=txtmem_len=0x8000 -Wl,-defsym=datamem_addr=0x80000000 -Wl,-defsym=datamem_len=0x8000 -specs=semihost.specs -specs=arcv.specs -T arcv.ld main.c -o main.elf
 ```
 
-If `--tcf=...` is omitted, then everything is passed right to GCC without any
+If `-tcf=...` is omitted, then everything is passed right to GCC without any
 extra options:
 
 ```

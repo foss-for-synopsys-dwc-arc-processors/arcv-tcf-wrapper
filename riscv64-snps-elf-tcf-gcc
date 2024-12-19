@@ -170,14 +170,14 @@ class TCF:
         return self._link_options_list.copy()
 
 _tcf_help = '''\
-Usage: riscv64-snps-elf-tcf-gcc [--tcf=<TCF path>] [--tcf-debug]
-                                [--tcf-help] [<GCC options>]
+Usage: riscv64-snps-elf-tcf-gcc [-tcf=<TCF path>] [-tcf-debug]
+                                [-tcf-help] [<GCC options>]
 
 Description of available options:
 
-    --tcf=<TCF path>    pass a path to a TCF file for parsing GCC options
-    --tcf-debug         enable printing of debug messages
-    --tcf-help          show this help message
+    -tcf=<TCF path>    pass a path to a TCF file for parsing GCC options
+    -tcf-debug         enable printing of debug messages
+    -tcf-help          show this help message
     <GCC options>       all other options a passed directly to GCC
 '''
 
@@ -192,13 +192,13 @@ def main():
     mabi_presented = False
     mcmodel_presented = False
 
-    # Parse arguments and find --tcf*=... options
+    # Parse arguments and find -tcf*=... options
     for arg in original_arguments:
-        if arg.startswith('--tcf='):
+        if arg.startswith('-tcf='):
             tcf_filename = arg.split('=', maxsplit=1)[1]
-        elif arg == '--tcf-debug':
+        elif arg == '-tcf-debug':
             logging.getLogger().setLevel(logging.DEBUG)
-        elif arg == '--tcf-help':
+        elif arg == '-tcf-help':
             print_tcf_help()
             return 0
         else:
