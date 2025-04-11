@@ -65,51 +65,34 @@ class TCF:
         self._compile_options_list = []
         compile_options_list_raw = [option.strip() for option in options_node.text.split()]
 
-        # Generate -march and -mtune
+        # Generate -march, -mtune and -mabi
         self._march = None
-        self._mtune = ''
+        self._mtune = None
+        self._mabi = None
+        self._mcmodel = 'medlow'
+
         for option in compile_options_list_raw:
-            if '-march=' in option:
+            if option.startswith('-march='):
                 self._march = option.split('=')[1]
-                self._compile_options_list.append(option)
-            elif '-mtune=' in option:
+            elif option.startswith('-mtune='):
                 self._mtune = option.split('=')[1]
-
-                # Fix deprecated -mtune values
-                if self._mtune == 'rmx100':
-                    self._mtune = 'arc-v-rmx-100-series'
-                elif self._mtune == 'rmx500':
-                    self._mtune = 'arc-v-rmx-500-series'
-                elif self._mtune == 'rhx':
-                    self._mtune = 'arc-v-rhx-100-series'
-
-                self._compile_options_list.append('-mtune={}'.format(self._mtune))
-            else:
-                self._compile_options_list.append(option)
+            elif option.startswith('-mabi='):
+                self._mabi = option.split('=')[1]
+            self._compile_options_list.append(option)
 
         if self._march is None:
             logging.error('-march is not presented in TCF.')
             sys.exit(1)
 
-        # Generate -mabi
-        self._mabi = None
-        if 'rv32i' in self._march:
-            self._mabi = 'ilp32'
-        elif 'rv32e' in self._march:
-            self._mabi = 'ilp32e'
-        elif 'rv64i' in self._march:
-            self._mabi = 'lp64'
-        else:
-            logging.error('cannot generate -mabi for -march=%s.', self._march)
+        if self._mtune is None:
+            logging.error('-mtune is not presented in TCF.')
             sys.exit(1)
-        
-        if '_d' in self._march:
-            self._mabi += 'd'
-        elif '_f' in self._march:
-            self._mabi += 'f'
 
-        # Generate -mcmodel
-        self._mcmodel = 'medlow'
+        if self._mabi is None:
+            logging.error('-mabi is not presented in TCF.')
+            sys.exit(1)
+
+        # Generate -mcmodel for RV64 targets
         if 'rv64' in self._march:
             self._mcmodel = 'medany'
 
@@ -129,25 +112,33 @@ class TCF:
             key, value = nsim_option.strip().split('=')
             nsim_options_map[key] = value
 
+        # Newlib/Picolibc toolchains and nSIM use different symbols
+        # for .text and .data sections:
+        #
+        #     Section          Newlib          Picolibc        nSIM
+        #     .text address    txtmem_addr     __flash         iccm0_base
+        #     .text size       txtmem_len      __flash_size    iccm0_size
+        #     .data address    datamem_addr    __ram           dccm_base
+        #     .data size       datamem_len     __ram_size      dccm_size
         self._iccm_base = nsim_options_map.get('iccm0_base', None)
         if self._iccm_base is not None:
-            self._iccm_base_option = '-Wl,-defsym=txtmem_addr={}'.format(self._iccm_base)
-            self._link_options_list.append(self._iccm_base_option)
+            self._link_options_list.append('-Wl,-defsym=txtmem_addr={}'.format(self._iccm_base))
+            self._link_options_list.append('-Wl,-defsym=__flash={}'.format(self._iccm_base))
 
         self._iccm_size = nsim_options_map.get('iccm0_size', None)
         if self._iccm_size is not None:
-            self._iccm_size_options = '-Wl,-defsym=txtmem_len={}'.format(self._iccm_size)
-            self._link_options_list.append(self._iccm_size_options)
+            self._link_options_list.append('-Wl,-defsym=txtmem_len={}'.format(self._iccm_size))
+            self._link_options_list.append('-Wl,-defsym=__flash_size={}'.format(self._iccm_size))
 
         self._dccm_base = nsim_options_map.get('dccm_base', None)
         if self._dccm_base is not None:
-            self._dccm_base_options = '-Wl,-defsym=datamem_addr={}'.format(self._dccm_base)
-            self._link_options_list.append(self._dccm_base_options)
+            self._link_options_list.append('-Wl,-defsym=datamem_addr={}'.format(self._dccm_base))
+            self._link_options_list.append('-Wl,-defsym=__ram={}'.format(self._dccm_base))
 
         self._dccm_size = nsim_options_map.get('dccm_size', None)
         if self._dccm_size is not None:
-            self._dccm_size_options = '-Wl,-defsym=datamem_len={}'.format(self._dccm_size)
-            self._link_options_list.append(self._dccm_size_options)
+            self._link_options_list.append('-Wl,-defsym=datamem_len={}'.format(self._dccm_size))
+            self._link_options_list.append('-Wl,-defsym=__ram_size={}'.format(self._dccm_size))
 
         logging.debug('link options extracted: %s', str(self._link_options_list))
 
@@ -191,8 +182,6 @@ def main():
     filtered_arguments_current = filtered_arguments_before
     tcf_filename = None
     tcf_options = []
-    mabi_presented = False
-    mcmodel_presented = False
 
     # Parse arguments and find -tcf*=... options
     for arg in original_arguments:
@@ -205,20 +194,11 @@ def main():
             print_tcf_help()
             return 0
         else:
-            if arg.startswith('-mabi='):
-                mabi_presented = True
-            elif arg.startswith('-mcmodel='):
-                mcmodel_presented = True
             filtered_arguments_current.append(arg)
     
     if tcf_filename is not None:
         tcf = TCF(tcf_filename)
-        tcf_options = tcf.get_compile_options()
-        if not mabi_presented:
-            tcf_options.append('-mabi={}'.format(tcf.get_mabi()))
-        if not mcmodel_presented:
-            tcf_options.append('-mcmodel={}'.format(tcf.get_mcmodel()))
-        tcf_options.extend(tcf.get_link_options())
+        tcf_options = tcf.get_compile_options() + tcf.get_link_options()
 
     # Generate GCC binary name
     binary_name_prefix, binary_name_postfix = os.path.basename(__file__).split('-tcf-')
