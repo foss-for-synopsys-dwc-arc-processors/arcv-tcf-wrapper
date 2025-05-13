@@ -109,7 +109,7 @@ class TCF:
 
         nsim_options_map = {}
         for nsim_option in nsim_node.text.split():
-            key, value = nsim_option.strip().split('=')
+            key, value = nsim_option.strip().split('=', maxsplit=1)
             nsim_options_map[key] = value
 
         # Newlib/Picolibc toolchains and nSIM use different symbols
