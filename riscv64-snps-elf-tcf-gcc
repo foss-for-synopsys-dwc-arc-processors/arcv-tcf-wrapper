@@ -28,12 +28,11 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import sys
 import logging
-from typing import List
-import xml.etree.ElementTree as ET
-import subprocess
 import os
+import subprocess
+import sys
+import xml.etree.ElementTree as ET
 
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.ERROR)
 
@@ -144,20 +143,20 @@ class TCF:
 
     def get_march(self) -> str:
         return self._march
-    
+
     def get_mabi(self) -> str:
         return self._mabi
-    
+
     def get_mtune(self) -> str:
         return self._mtune
-    
+
     def get_mcmodel(self) -> str:
         return self._mcmodel
-    
-    def get_compile_options(self) -> List[str]:
+
+    def get_compile_options(self) -> list[str]:
         return self._compile_options_list.copy()
-    
-    def get_link_options(self) -> List[str]:
+
+    def get_link_options(self) -> list[str]:
         return self._link_options_list.copy()
 
 _tcf_help = '''\
@@ -226,7 +225,7 @@ def main():
     except FileNotFoundError:
         logging.error('cannot find GCC binary: %s', binary_path)
         exit_code = 1
-    
+
     return exit_code
 
 if __name__ == '__main__':
