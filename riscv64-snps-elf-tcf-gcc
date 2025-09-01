@@ -80,15 +80,15 @@ class TCF:
             self._compile_options_list.append(option)
 
         if self._march is None:
-            logging.error('-march is not presented in TCF.')
+            logging.error('-march is not found in TCF.')
             sys.exit(1)
 
         if self._mtune is None:
-            logging.error('-mtune is not presented in TCF.')
+            logging.error('-mtune is not found in TCF.')
             sys.exit(1)
 
         if self._mabi is None:
-            logging.error('-mabi is not presented in TCF.')
+            logging.error('-mabi is not found in TCF.')
             sys.exit(1)
 
         # Generate -mcmodel for RV64 targets
