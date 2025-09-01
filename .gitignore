@@ -1,0 +1,4 @@
+*
+!.gitignore
+!README.md
+!riscv64-snps-elf-tcf-gcc
