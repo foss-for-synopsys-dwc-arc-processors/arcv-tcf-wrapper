@@ -37,8 +37,9 @@ import xml.etree.ElementTree as ET
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.ERROR)
 
 class TCF:
-    def __init__(self, filename: str):
+    def __init__(self, filename: str, no_compressed: bool=False):
         self._filename = filename
+        self._no_compressed = no_compressed
         self._init_root_node()
         self._init_compile_options()
         self._init_link_options()
@@ -72,11 +73,17 @@ class TCF:
 
         for option in compile_options_list_raw:
             if option.startswith('-march='):
-                self._march = option.split('=')[1]
+                self._march = option.split('=')[1].lower()
+                extensions = self.get_extensions()
+                if self._no_compressed:
+                    candidates = ['c', 'zca', 'zcb', 'zcf', 'zcd', 'zcmp', 'zcmt']
+                    extensions = list(filter(lambda x: x not in candidates, extensions))
+                    self._march = '_'.join(extensions)
+                option = '-march=' + self._march
             elif option.startswith('-mtune='):
-                self._mtune = option.split('=')[1]
+                self._mtune = option.split('=')[1].lower()
             elif option.startswith('-mabi='):
-                self._mabi = option.split('=')[1]
+                self._mabi = option.split('=')[1].lower()
             self._compile_options_list.append(option)
 
         if self._march is None:
@@ -144,6 +151,27 @@ class TCF:
     def get_march(self) -> str:
         return self._march
 
+    def get_family(self) -> str:
+        for family in 'rv32i', 'rv32e', 'rv64i':
+            if self._march.startswith(family):
+                return family
+
+        raise ValueError('march does not start with a correct family')
+
+    def get_extensions(self) -> list[str]:
+        family = self.get_family()
+        march = self._march[len(family):]
+        extensions = [family]
+
+        for extension in march.split('_'):
+            extension = extension.replace('_', '')
+            if extension.startswith('z'):
+                extensions.append(extension)
+            else:
+                extensions.extend(list(extension))
+
+        return extensions
+
     def get_mabi(self) -> str:
         return self._mabi
 
@@ -168,7 +196,8 @@ Description of available options:
     -tcf=<TCF path>    pass a path to a TCF file for parsing GCC options
     -tcf-debug         enable printing of debug messages
     -tcf-help          show this help message
-    <GCC options>       all other options a passed directly to GCC
+    -tcf-no-compress   remove extensions for compressed instructions from march
+    <GCC options>      all other options a passed directly to GCC
 '''
 
 def print_tcf_help():
@@ -181,6 +210,7 @@ def main():
     filtered_arguments_current = filtered_arguments_before
     tcf_filename = None
     tcf_options = []
+    tcf_no_compressed = False
 
     # Parse arguments and find -tcf*=... options
     for arg in original_arguments:
@@ -189,6 +219,8 @@ def main():
             filtered_arguments_current = filtered_arguments_after
         elif arg == '-tcf-debug':
             logging.getLogger().setLevel(logging.DEBUG)
+        elif arg == '-tcf-no-compressed':
+            tcf_no_compressed = True
         elif arg == '-tcf-help':
             print_tcf_help()
             return 0
@@ -196,7 +228,7 @@ def main():
             filtered_arguments_current.append(arg)
     
     if tcf_filename is not None:
-        tcf = TCF(tcf_filename)
+        tcf = TCF(tcf_filename, no_compressed=tcf_no_compressed)
         tcf_options = tcf.get_compile_options() + tcf.get_link_options()
 
     # Generate GCC binary name
