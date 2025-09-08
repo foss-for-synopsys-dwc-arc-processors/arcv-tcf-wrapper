@@ -196,7 +196,7 @@ Description of available options:
     -tcf=<TCF path>    pass a path to a TCF file for parsing GCC options
     -tcf-debug         enable printing of debug messages
     -tcf-help          show this help message
-    -tcf-no-compress   remove extensions for compressed instructions from march
+    -tcf-no-compressed remove extensions for compressed instructions from march
     <GCC options>      all other options a passed directly to GCC
 '''
 
