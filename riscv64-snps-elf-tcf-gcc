@@ -74,9 +74,9 @@ class TCF:
         for option in compile_options_list_raw:
             if option.startswith('-march='):
                 self._march = option.split('=')[1].lower()
-                extensions = self.get_extensions()
                 if self._no_compressed:
                     candidates = ['c', 'zca', 'zcb', 'zcf', 'zcd', 'zcmp', 'zcmt']
+                    extensions = self.get_extensions()
                     extensions = list(filter(lambda x: x not in candidates, extensions))
                     self._march = '_'.join(extensions)
                 option = '-march=' + self._march
@@ -165,7 +165,9 @@ class TCF:
 
         for extension in march.split('_'):
             extension = extension.replace('_', '')
-            if extension.startswith('z'):
+            if len(extension) == 0:
+                continue
+            if extension[0] in ('z', 'x'):
                 extensions.append(extension)
             else:
                 extensions.extend(list(extension))
