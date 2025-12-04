@@ -1,0 +1,316 @@
+#!/usr/bin/env python3
+
+# Copyright (c) 2026, Synopsys, Inc. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1) Redistributions of source code must retain the above copyright notice,
+# this list of conditions and the following disclaimer.
+#
+# 2) Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# 3) Neither the name of the Synopsys, Inc., nor the names of its contributors
+# may be used to endorse or promote products derived from this software
+# without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
+import argparse
+import logging
+import os
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
+
+
+@dataclass
+class PrerequisitesGeneratorConfiguration:
+    triplet: str
+    build_log_path: str
+    build_dir_path: str
+    sources_dir_path: str
+    output_dir_path: str
+
+
+def find_library_object_files(library_path: str) -> list[str]:
+    result = subprocess.run(
+        ["ar", "-t", library_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8"
+    )
+
+    if result.returncode != 0:
+        logging.error("Error while retrieving object files from %s:\n%s", library_path, result.stdout)
+        sys.exit(1)
+
+    return sorted(result.stdout.split())
+
+
+def find_multiline_object_build_command(object_file_name: str, libgcc_build_log: str) -> str:
+    grep_after_lines = 0
+
+    while True:
+        # All target object files are built with extra -MT argument. We should
+        # rely on this behavior to filter objects files with the same names but
+        # not related to target code.
+        arguments = [
+            "grep",
+            "-A {}".format(grep_after_lines),
+            "\\-o {} \\-MT".format(object_file_name),
+            libgcc_build_log,
+        ]
+        result = subprocess.run(arguments, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8")
+
+        if result.returncode != 0:
+            logging.error("Error while searching a build ling in logs:\n%s", result.stdout)
+            sys.exit(1)
+
+        build_command = result.stdout.strip()
+
+        # Some original build commands may be present as a multiline
+        # with "\" endings in the original Makefile. If we encounter a build
+        # command with "\" then we should grab extra lines from a build log.
+        if build_command.endswith("\\"):
+            grep_after_lines += 1
+        else:
+            return " ".join(build_command.replace("\\", "").splitlines())
+
+
+def parse_dep_file_dependencies(dep_file_path: str) -> list[str]:
+    logging.info("Analyzing dependencies file: %s.", dep_file_path)
+
+    dep_file_path = Path(dep_file_path)
+    dep_file_name = dep_file_path.name
+
+    # We put all dependency from a .dep file to a set to exclude duplications.
+    dependencies = set()
+
+    # We need to perform these transformations on .dep lines to convert them
+    # to clean paths:
+    #
+    #     1. Remove .o target (the object file itself).
+    #     2. Remove all ":" and "\" symbols
+    #     3. Remove dependencies with "sys-include" - they could be found in
+    #        a prebuilt GCC for RISC-V.
+    #     4. Convert all relative paths to absolute paths.
+    #     5. Add dependencies to a set to eliminated duplications.
+    with open(dep_file_path, "r", encoding="utf-8") as f:
+        for path in f.readlines():
+            chunks = path.strip().split()
+
+            for chunk in chunks:
+                chunk = chunk.strip()
+
+                logging.debug("Analyzing .dep file: %s: analyzing dependency %s", dep_file_name, chunk)
+
+                # .dep file is Makefile. Remove a target for an object file itself and
+                # "\" symbols for lists of dependencies.
+                if chunk.endswith("o:") or chunk == "\\":
+                    continue
+
+                # Remove headers from sys-include. Precompiled GCC will use
+                # its own headers.
+                if "sys-include" in chunk:
+                    continue
+
+                # Most dependencies are just empty make rules. Just remove ":".
+                if chunk.endswith(":"):
+                    chunk = chunk[:-1]
+
+                if not Path(chunk).is_absolute():
+                    chunk = dep_file_path.parent.joinpath(chunk)
+
+                    # If it's a symlink then add both the symlink and
+                    # the original file.
+                    if not chunk.is_symlink():
+                        chunk = chunk.resolve()
+                    else:
+                        dependencies.add(str(chunk.resolve()))
+
+                    chunk = str(chunk)
+
+                dependencies.add(chunk)
+
+                logging.debug("Analyzing .dep file: %s: adding dependency %s", dep_file_name, chunk)
+
+    return sorted(list(dependencies))
+
+
+# This functions works only for libgcc so far.
+def generate_libgcc_prerequisites(configuration: PrerequisitesGeneratorConfiguration):
+    # Retrieve a list of all .o files in a library.
+    libgcc_library_path = Path(configuration.build_dir_path).joinpath(
+        configuration.triplet, "libgcc", "libgcc.a"
+    )
+    libgcc_object_file_names = find_library_object_files(libgcc_library_path)
+
+    # Add crt*.o object files from libgcc bundle too.
+    crt_object_file_names = ["crtbegin.o", "crtend.o", "crti.o", "crtn.o"]
+
+    # Add all object files to a single list.
+    all_object_file_names = libgcc_object_file_names + crt_object_file_names
+    logging.debug("Retrieved this list of object files:\n%s", str(all_object_file_names))
+
+    # Convert all object files to .dep files with .c and .h dependencies.
+    dep_file_names = list(map(lambda name: name.replace(".o", ".dep"), all_object_file_names))
+    logging.debug("Retrieved this list of dep files:\n%s", str(dep_file_names))
+
+    # Retrieve of dependencies from all .dep files.
+    dependencies = set()
+
+    for dep_file_name in dep_file_names:
+        dep_file_path = libgcc_library_path.parent.joinpath(dep_file_name)
+        dependencies.update(parse_dep_file_dependencies(dep_file_path))
+
+    dependencies = sorted(list(dependencies))
+    logging.debug("The final list of dependencies:\n%s", "\n".join(dependencies))
+
+    # Prepare output directories.
+    output_dir_path = Path(configuration.output_dir_path)
+    output_dir_path.mkdir(parents=True, exist_ok=True)
+    output_build_dir_path = output_dir_path.joinpath("build")
+    output_build_dir_path.mkdir(exist_ok=True)
+    output_sources_dir_path = output_dir_path.joinpath("gcc")
+    output_sources_dir_path.mkdir(exist_ok=True)
+
+    # Copy all dependencies to a separate directory.
+    for source_dependency_file_path in dependencies:
+        source_dependency_file_path = Path(source_dependency_file_path)
+
+        # An original dependency must reside in sources or build directory.
+        # Otherwise we've encountered a faulty path.
+        if source_dependency_file_path.is_relative_to(configuration.build_dir_path):
+            destination_dependency_file_path = output_build_dir_path.joinpath(
+                source_dependency_file_path.relative_to(configuration.build_dir_path)
+            )
+        elif source_dependency_file_path.is_relative_to(configuration.sources_dir_path):
+            destination_dependency_file_path = output_sources_dir_path.joinpath(
+                source_dependency_file_path.relative_to(configuration.sources_dir_path)
+            )
+        else:
+            logging.error("Dependency is not in build or source directory: %s", source_dependency_file_path)
+            sys.exit(1)
+
+        destination_dependency_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if destination_dependency_file_path.exists():
+            os.remove(destination_dependency_file_path)
+
+        shutil.copy(source_dependency_file_path, destination_dependency_file_path, follow_symlinks=False)
+
+    makefile_path = Path(output_build_dir_path).joinpath(configuration.triplet, "libgcc", "Makefile")
+    logging.info("Opening Makefile for write for libgcc: %s", makefile_path)
+    makefile_file = makefile_path.open(mode="w", encoding="utf-8")
+    makefile_file.write("all: libgcc.a {}\n".format(" ".join(all_object_file_names)))
+
+    # Find a build line in libgcc's build log for each object file.
+    for object_file_name in all_object_file_names:
+        build_command = find_multiline_object_build_command(object_file_name, configuration.build_log_path)
+        logging.debug("Build line for %s:\n%s", object_file_name, build_command)
+
+        build_command_arguments = []
+        is_isystem = False
+        is_mt_mf = False
+
+        # Remove extra and duplicated arguments.
+        for chunk in build_command.split():
+            if chunk.endswith("xgcc"):
+                build_command_arguments.append("{}-gcc".format(configuration.triplet))
+            elif chunk.startswith("-B") or chunk in ["-MD", "-MP"]:
+                continue
+            elif is_isystem:
+                is_isystem = False
+            elif chunk == "-isystem":
+                is_isystem = True
+            elif is_mt_mf:
+                is_mt_mf = False
+            elif chunk in ["-MT", "-MF"]:
+                is_mt_mf = True
+            else:
+                if chunk not in build_command_arguments:
+                    build_command_arguments.append(chunk)
+
+        build_command = " ".join(build_command_arguments)
+
+        # Now we have a build command for a object file. Add it to a Makefile.
+        makefile_target = "{}:\n\t{}\n".format(object_file_name, build_command)
+        makefile_file.write(makefile_target)
+        logging.debug("Final build command for %s:\n%s", object_file_name, build_command)
+
+    # Add a final build rule for libgcc
+    makefile_file.writelines(
+        [
+            "libgcc.a: {}\n".format(" ".join(libgcc_object_file_names)),
+            "\triscv64-snps-elf-ar rc libgcc.a $^\n",
+            "\triscv64-snps-elf-ranlib libgcc.a\n",
+        ]
+    )
+    makefile_file.close()
+
+
+ARGPARSE_COMMAND_PREPARE = "prepare"
+ARGPARSE_COMMAND_BUILD = "build"
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog=os.path.basename(__file__), description="Buildlib for ARC-V GNU toolchain."
+    )
+    parser.add_argument("--debug", action="store_true")
+    subparsers = parser.add_subparsers(help="subcommand help", dest="command")
+    parser_prepare = subparsers.add_parser(
+        ARGPARSE_COMMAND_PREPARE, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser_prepare.add_argument("--build-log-path", type=str, required=True, metavar="PATH")
+    parser_prepare.add_argument("--build-dir-path", type=str, required=True, metavar="PATH")
+    parser_prepare.add_argument("--sources-dir-path", type=str, required=True, metavar="PATH")
+    parser_prepare.add_argument(
+        "--output",
+        type=str,
+        default="buildlib",
+        metavar="PATH",
+        help="Output directory for buildlib prerequisites",
+    )
+    default_triplet = os.path.basename(__file__).rsplit("-", maxsplit=1)[0]
+    parser_prepare.add_argument("--triplet", type=str, default=default_triplet, help="A toolchain triplet")
+    args = parser.parse_args()
+
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    if args.command is None:
+        print(parser.print_help())
+        return 0
+    elif args.command == ARGPARSE_COMMAND_PREPARE:
+        configuration = PrerequisitesGeneratorConfiguration(
+            triplet=args.triplet,
+            build_log_path=args.build_log_path,
+            build_dir_path=args.build_dir_path,
+            sources_dir_path=args.sources_dir_path,
+            output_dir_path=args.output,
+        )
+        generate_libgcc_prerequisites(configuration)
+    elif args.command == ARGPARSE_COMMAND_BUILD:
+        logging.error("build subcommand is not implemented yet!")
+        return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

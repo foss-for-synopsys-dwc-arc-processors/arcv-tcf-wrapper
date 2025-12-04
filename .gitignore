@@ -2,3 +2,4 @@
 !.gitignore
 !README.md
 !riscv64-snps-elf-tcf-gcc
+!riscv64-snps-elf-buildlib
