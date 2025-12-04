@@ -245,7 +245,10 @@ def generate_libgcc_prerequisites(configuration: PrerequisitesGeneratorConfigura
                 if chunk not in build_command_arguments:
                     build_command_arguments.append(chunk)
 
+        # Craft a final build command and append CFLAGS for extra
+        # target argument.
         build_command = " ".join(build_command_arguments)
+        build_command += ' $(CFLAGS)'
 
         # Now we have a build command for a object file. Add it to a Makefile.
         makefile_target = "{}:\n\t{}\n".format(object_file_name, build_command)
