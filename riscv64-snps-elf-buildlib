@@ -45,14 +45,21 @@ class PrerequisitesGeneratorConfiguration:
     triplet: str
     build_log_path: str
     build_dir_path: str
-    sources_dir_path: str
-    output_dir_path: str
+    gcc_sources_dir_path: str
+    picolibc_sources_dir_path: str
+    buildlib_dir_path: str
+
+
+@dataclass
+class BuilderConfiguration:
+    triplet: str
+    buildlib_dir_path: str
+    install_dir_path: str
+    cflags: str
 
 
 def find_library_object_files(library_path: str) -> list[str]:
-    result = subprocess.run(
-        ["ar", "-t", library_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8"
-    )
+    result = subprocess.run(["ar", "-t", library_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8")
 
     if result.returncode != 0:
         logging.error("Error while retrieving object files from %s:\n%s", library_path, result.stdout)
@@ -151,12 +158,22 @@ def parse_dep_file_dependencies(dep_file_path: str) -> list[str]:
     return sorted(list(dependencies))
 
 
+def parse_gcc_version(gcc_executable: str) -> str:
+    result = subprocess.run([gcc_executable, "--version"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8")
+
+    if result.returncode != 0:
+        logging.error("Error while parsing GCC's version:\n%s", result.stdout)
+        sys.exit(1)
+
+    return result.stdout.strip().splitlines()[0].split()[-1].strip()
+
+
 # This functions works only for libgcc so far.
-def generate_libgcc_prerequisites(configuration: PrerequisitesGeneratorConfiguration):
+def generate_libgcc_prerequisites(cfg: PrerequisitesGeneratorConfiguration):
+    logging.info("Generating prerequisites for libgcc.")
+
     # Retrieve a list of all .o files in a library.
-    libgcc_library_path = Path(configuration.build_dir_path).joinpath(
-        configuration.triplet, "libgcc", "libgcc.a"
-    )
+    libgcc_library_path = Path(cfg.build_dir_path).joinpath(cfg.triplet, "libgcc", "libgcc.a")
     libgcc_object_file_names = find_library_object_files(libgcc_library_path)
 
     # Add crt*.o object files from libgcc bundle too.
@@ -181,7 +198,7 @@ def generate_libgcc_prerequisites(configuration: PrerequisitesGeneratorConfigura
     logging.debug("The final list of dependencies:\n%s", "\n".join(dependencies))
 
     # Prepare output directories.
-    output_dir_path = Path(configuration.output_dir_path)
+    output_dir_path = Path(cfg.buildlib_dir_path)
     output_dir_path.mkdir(parents=True, exist_ok=True)
     output_build_dir_path = output_dir_path.joinpath("build")
     output_build_dir_path.mkdir(exist_ok=True)
@@ -194,14 +211,10 @@ def generate_libgcc_prerequisites(configuration: PrerequisitesGeneratorConfigura
 
         # An original dependency must reside in sources or build directory.
         # Otherwise we've encountered a faulty path.
-        if source_dependency_file_path.is_relative_to(configuration.build_dir_path):
-            destination_dependency_file_path = output_build_dir_path.joinpath(
-                source_dependency_file_path.relative_to(configuration.build_dir_path)
-            )
-        elif source_dependency_file_path.is_relative_to(configuration.sources_dir_path):
-            destination_dependency_file_path = output_sources_dir_path.joinpath(
-                source_dependency_file_path.relative_to(configuration.sources_dir_path)
-            )
+        if source_dependency_file_path.is_relative_to(cfg.build_dir_path):
+            destination_dependency_file_path = output_build_dir_path.joinpath(source_dependency_file_path.relative_to(cfg.build_dir_path))
+        elif source_dependency_file_path.is_relative_to(cfg.gcc_sources_dir_path):
+            destination_dependency_file_path = output_sources_dir_path.joinpath(source_dependency_file_path.relative_to(cfg.gcc_sources_dir_path))
         else:
             logging.error("Dependency is not in build or source directory: %s", source_dependency_file_path)
             sys.exit(1)
@@ -213,14 +226,35 @@ def generate_libgcc_prerequisites(configuration: PrerequisitesGeneratorConfigura
 
         shutil.copy(source_dependency_file_path, destination_dependency_file_path, follow_symlinks=False)
 
-    makefile_path = Path(output_build_dir_path).joinpath(configuration.triplet, "libgcc", "Makefile")
+    # Create a skeleton of Makefile for libgcc.
+    makefile_path = Path(output_build_dir_path).joinpath(cfg.triplet, "libgcc", "Makefile")
     logging.info("Opening Makefile for write for libgcc: %s", makefile_path)
     makefile_file = makefile_path.open(mode="w", encoding="utf-8")
-    makefile_file.write("all: libgcc.a {}\n".format(" ".join(all_object_file_names)))
+    makefile_file.writelines(
+        [
+            ".PHONY: all install clean\n\n",
+            "TRIPLET ?= {}\n".format(cfg.triplet),
+            "GCC ?= $(TRIPLET)-gcc\n",
+            "DESTDIR ?= ../../../install\n",
+            "INSTALL_SUBDIR := lib/gcc/$(TRIPLET)/$(shell $(GCC) -dumpfullversion)\n"
+            "OBJECTS_LIBGCC := {}\n".format(" ".join(libgcc_object_file_names)),
+            "OBJECTS_CRT := {}\n".format(" ".join(crt_object_file_names)),
+            "OBJECTS_ALL := $(OBJECTS_LIBGCC) $(OBJECTS_CRT)\n\n",
+            "all: libgcc.a $(OBJECTS_ALL)\n\n",
+            "install: libgcc.a $(OBJECTS_CRT)\n",
+            "\tmkdir -p $(DESTDIR)/$(INSTALL_SUBDIR)\n",
+            "\tcp -f $^ $(DESTDIR)/$(INSTALL_SUBDIR)\n\n",
+            "clean:\n",
+            "\trm -f libgcc.a $(OBJECTS_ALL)\n\n",
+            "libgcc.a: $(OBJECTS_LIBGCC)\n",
+            "\triscv64-snps-elf-ar rc $@ $^\n",
+            "\triscv64-snps-elf-ranlib $@\n\n",
+        ]
+    )
 
     # Find a build line in libgcc's build log for each object file.
     for object_file_name in all_object_file_names:
-        build_command = find_multiline_object_build_command(object_file_name, configuration.build_log_path)
+        build_command = find_multiline_object_build_command(object_file_name, cfg.build_log_path)
         logging.debug("Build line for %s:\n%s", object_file_name, build_command)
 
         build_command_arguments = []
@@ -229,41 +263,64 @@ def generate_libgcc_prerequisites(configuration: PrerequisitesGeneratorConfigura
 
         # Remove extra and duplicated arguments.
         for chunk in build_command.split():
-            if chunk.endswith("xgcc"):
-                build_command_arguments.append("{}-gcc".format(configuration.triplet))
-            elif chunk.startswith("-B") or chunk in ["-MD", "-MP"]:
+            if chunk.endswith("xgcc") or chunk.startswith("-B"):
+                # We are not going to use xgcc from the original build and
+                # extra -B include flags.
                 continue
+            elif chunk in ["-MD", "-MP", "-g", "-O0", "-O1", "-O2", "-O3", "-Ofast", "-Os"]:
+                # Skip all unnecessary and optimization options from the original build.
+                continue
+            elif chunk == "-isystem":
+                # We don't need -isystem includes. GCC will use includes from
+                # a prebuilt bundle.
+                is_isystem = True
             elif is_isystem:
                 is_isystem = False
-            elif chunk == "-isystem":
-                is_isystem = True
+            elif chunk in ["-MT", "-MF"]:
+                # We can skip -MT and -MF with its arguments.
+                is_mt_mf = True
             elif is_mt_mf:
                 is_mt_mf = False
-            elif chunk in ["-MT", "-MF"]:
-                is_mt_mf = True
             else:
+                # Add a flag to the final build command if it's not duplicated.
                 if chunk not in build_command_arguments:
                     build_command_arguments.append(chunk)
 
         # Craft a final build command and append CFLAGS for extra
         # target argument.
-        build_command = " ".join(build_command_arguments)
-        build_command += ' $(CFLAGS)'
+        build_command = "$(GCC) {} $(CFLAGS)".format(" ".join(build_command_arguments))
 
         # Now we have a build command for a object file. Add it to a Makefile.
-        makefile_target = "{}:\n\t{}\n".format(object_file_name, build_command)
+        makefile_target = "{}:\n\t{}\n\n".format(object_file_name, build_command)
         makefile_file.write(makefile_target)
         logging.debug("Final build command for %s:\n%s", object_file_name, build_command)
 
-    # Add a final build rule for libgcc
-    makefile_file.writelines(
-        [
-            "libgcc.a: {}\n".format(" ".join(libgcc_object_file_names)),
-            "\triscv64-snps-elf-ar rc libgcc.a $^\n",
-            "\triscv64-snps-elf-ranlib libgcc.a\n",
-        ]
-    )
     makefile_file.close()
+
+
+def generate_picolibc_prerequisites(cfg: PrerequisitesGeneratorConfiguration):
+    logging.info("Generating prerequisites for Picolibc.")
+    shutil.copytree(cfg.picolibc_sources_dir_path, os.path.join(cfg.buildlib_dir_path, "picolibc"))
+
+
+def build_libgcc(cfg: BuilderConfiguration):
+    libgcc_dir_path = Path(cfg.buildlib_dir_path).joinpath("build", cfg.triplet, "libgcc").resolve()
+
+    arguments = 'make install CFLAGS="{}" DESTDIR="{}"'.format(cfg.cflags, cfg.install_dir_path)
+    logging.info("Building a configuration: %s", arguments)
+
+    if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+        result = subprocess.run(arguments, encoding="utf-8", cwd=str(libgcc_dir_path), shell=True)
+
+        if result.returncode != 0:
+            logging.error("Error while building libgcc.")
+            sys.exit(1)
+    else:
+        result = subprocess.run(arguments, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8", cwd=str(libgcc_dir_path), shell=True)
+
+        if result.returncode != 0:
+            logging.error("Error while building libgcc:\n%s", result.stdout)
+            sys.exit(1)
 
 
 ARGPARSE_COMMAND_PREPARE = "prepare"
@@ -271,26 +328,33 @@ ARGPARSE_COMMAND_BUILD = "build"
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        prog=os.path.basename(__file__), description="Buildlib for ARC-V GNU toolchain."
-    )
+    default_triplet = os.path.basename(__file__).rsplit("-", maxsplit=1)[0]
+    parser = argparse.ArgumentParser(prog=os.path.basename(__file__), description="Buildlib for ARC-V GNU toolchain.")
     parser.add_argument("--debug", action="store_true")
-    subparsers = parser.add_subparsers(help="subcommand help", dest="command")
-    parser_prepare = subparsers.add_parser(
-        ARGPARSE_COMMAND_PREPARE, formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
+    subparsers = parser.add_subparsers(dest="command")
+
+    # The arguments parser for the prerequisites generator.
+    parser_prepare = subparsers.add_parser(ARGPARSE_COMMAND_PREPARE, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_prepare.add_argument("--build-log-path", type=str, required=True, metavar="PATH")
     parser_prepare.add_argument("--build-dir-path", type=str, required=True, metavar="PATH")
-    parser_prepare.add_argument("--sources-dir-path", type=str, required=True, metavar="PATH")
+    parser_prepare.add_argument("--gcc-sources-dir-path", type=str, required=True, metavar="PATH")
+    parser_prepare.add_argument("--picolibc-sources-dir-path", type=str, required=True, metavar="PATH")
     parser_prepare.add_argument(
-        "--output",
-        type=str,
-        default="buildlib",
-        metavar="PATH",
-        help="Output directory for buildlib prerequisites",
+        "--buildlib-dir-path", type=str, default="buildlib", metavar="PATH", help="Output directory for buildlib prerequisites"
     )
-    default_triplet = os.path.basename(__file__).rsplit("-", maxsplit=1)[0]
     parser_prepare.add_argument("--triplet", type=str, default=default_triplet, help="A toolchain triplet")
+    parser_prepare.add_argument("--clean", action="store_true")
+
+    # The arguments parser for the builder of libraries.
+    parser_build = subparsers.add_parser(ARGPARSE_COMMAND_BUILD, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_build.add_argument("--buildlib-dir-path", type=str, default="buildlib", metavar="PATH", help="Path to buildlib prerequisites")
+    parser_build.add_argument("--install-dir-path", type=str, default="output", metavar="PATH", help="Path to the output directory")
+    parser_build.add_argument("--cflags", type=str, default="-g -O2", metavar="CFLAGS", help="Extra target flags for GCC")
+    parser_build.add_argument("--triplet", type=str, default=default_triplet, help="A toolchain triplet")
+    parser_build.add_argument("--no-libgcc", action="store_true")
+    parser_build.add_argument("--no-libstdc++", action="store_true")
+    parser_build.add_argument("--no-picolibc", action="store_true")
+
     args = parser.parse_args()
 
     if args.debug:
@@ -298,19 +362,33 @@ def main():
 
     if args.command is None:
         print(parser.print_help())
-        return 0
     elif args.command == ARGPARSE_COMMAND_PREPARE:
         configuration = PrerequisitesGeneratorConfiguration(
             triplet=args.triplet,
-            build_log_path=args.build_log_path,
-            build_dir_path=args.build_dir_path,
-            sources_dir_path=args.sources_dir_path,
-            output_dir_path=args.output,
+            build_log_path=os.path.abspath(args.build_log_path),
+            build_dir_path=os.path.abspath(args.build_dir_path),
+            gcc_sources_dir_path=os.path.abspath(args.gcc_sources_dir_path),
+            picolibc_sources_dir_path=os.path.abspath(args.picolibc_sources_dir_path),
+            buildlib_dir_path=os.path.abspath(args.buildlib_dir_path),
         )
+
+        if args.clean:
+            logging.info("Removing buildlib directory: %s", configuration.buildlib_dir_path)
+            if os.path.exists(configuration.buildlib_dir_path):
+                shutil.rmtree(configuration.buildlib_dir_path)
+
         generate_libgcc_prerequisites(configuration)
+        generate_picolibc_prerequisites(configuration)
     elif args.command == ARGPARSE_COMMAND_BUILD:
-        logging.error("build subcommand is not implemented yet!")
-        return 1
+        configuration = BuilderConfiguration(
+            triplet=args.triplet,
+            buildlib_dir_path=os.path.abspath(args.buildlib_dir_path),
+            install_dir_path=os.path.abspath(args.install_dir_path),
+            cflags=args.cflags,
+        )
+
+        if not args.no_libgcc:
+            build_libgcc(configuration)
 
     return 0
 
