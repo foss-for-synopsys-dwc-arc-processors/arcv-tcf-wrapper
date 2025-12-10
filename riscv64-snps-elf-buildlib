@@ -39,6 +39,13 @@ from pathlib import Path
 
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
 
+@dataclass
+class PrepareGate1Configuration:
+    triplet: str
+    gcc_binary_path: str
+    workspace_dir_path: str
+    gcc_sources_dir_path: str
+    picolibc_sources_dir_path: str
 
 @dataclass
 class PrerequisitesGeneratorConfiguration:
@@ -56,6 +63,113 @@ class BuilderConfiguration:
     buildlib_dir_path: str
     install_dir_path: str
     cflags: str
+
+#
+# Prepare stage 1 code.
+#
+
+PREPARE_STAGE1_DIR_NAME = 'stage1'
+PREPARE_STAGE1_NPROC = 4
+
+def prepare_stage1(cfg: PrepareGate1Configuration):
+    # Locate target's include directory. It's required for building GCC's libraries.
+    toolchain_root_dir_path = Path(cfg.gcc_binary_path).parent.parent
+    include_dir_path = toolchain_root_dir_path.joinpath(cfg.triplet, "include")
+
+    if not include_dir_path.exists():
+        logging.error("Include directory for the toolchain does not exist: %s", include_dir_path)
+
+    logging.info("Found include directory for the toolchain: %s", include_dir_path)
+
+    # Create a stage 1 directory.
+    stage1_dir_path = Path(cfg.workspace_dir_path).joinpath(PREPARE_STAGE1_DIR_NAME).absolute()
+    stage1_dir_path.mkdir(parents=True)
+    logging.info('Creating a workspace directory for stage 1: %s', stage1_dir_path)
+
+    # Create a link to GCC sources so we will be able to use relative paths
+    # while building libraries.
+    gcc_sources_path_link = stage1_dir_path.joinpath('gcc')
+    gcc_sources_path_link.symlink_to(cfg.gcc_sources_dir_path, True)
+    logging.info('Creating a symbolic link to GCC sources: %s', cfg.gcc_sources_dir_path)
+
+    # Create a link to Picolibc sources. It will be used on stage 2.
+    picolibc_sources_path_link = stage1_dir_path.joinpath('picolibc')
+    picolibc_sources_path_link.symlink_to(cfg.picolibc_sources_dir_path, True)
+    logging.info('Creating a symbolic link to Picolibc sources: %s', cfg.picolibc_sources_dir_path)
+
+    # Create a build directory.
+    build_dir_path = stage1_dir_path.joinpath('build')
+    build_dir_path.mkdir()
+    logging.info('Creating a build directory for stage 1: %s', build_dir_path)
+
+    # Construct an install directory path. It's not required further but we should
+    # prevent make from trying to put headers to host's directories.
+    install_dir_path = stage1_dir_path.joinpath('install')
+
+    # Add a toolchain's GCC binary to PATH to make it visible for configure and make.
+    env = os.environ.copy()
+    env['PATH'] = '{}:{}'.format(os.path.dirname(cfg.gcc_binary_path), env['PATH'])
+
+    # Now we are going to configure GCC for a random non-multilib target. We need it
+    # only for logs so it does not matter what particular target is used.
+    arguments = [
+        '../gcc/configure',
+        '--target={}'.format(cfg.triplet),
+        '--prefix={}'.format(install_dir_path),
+        '--disable-shared',
+        '--disable-threads',
+        '--enable-languages=c,c++',
+        '--enable-tls',
+        '--with-newlib',
+        '--with-headers={}'.format(include_dir_path),
+        '--disable-libmudflap',
+        '--disable-libssp',
+        '--disable-libquadmath',
+        '--disable-libgomp',
+        '--disable-nls',
+        '--disable-tm-clone-registry',
+        '--disable-multilib',
+        '--with-arch=rv32imac',
+        '--with-abi=ilp32',
+        '--with-tune=rocket',
+        '--with-cmodel=medlow',
+        '--with-isa-spec=20191213'
+    ]
+
+    with open(stage1_dir_path.joinpath('config.log'), 'w', encoding='utf-8') as log_file:
+        command = ' '.join(arguments)
+        logging.info('Configuring GCC:\n%s', command)
+        log_file.write(command + '\n')
+        log_file.flush()
+
+        result = subprocess.run(arguments, stdout=log_file, stderr=subprocess.STDOUT, encoding='utf-8', env=env, cwd=build_dir_path)
+
+        if result.returncode != 0:
+            logging.error("Configuring of GCC failed, check the log file.")
+            sys.exit(1)
+
+    # Now we are ready to build libgcc and libstdc++.
+    arguments = [
+        'make',
+        '-j',
+        str(PREPARE_STAGE1_NPROC),
+        'all-target-libgcc',
+        'all-target-libstdc++-v3'
+    ]
+
+    with open(stage1_dir_path.joinpath('build.log'), 'w', encoding='utf-8') as log_file:
+        command = ' '.join(arguments)
+        logging.info('Building GCC libraries:\n%s', command)
+        log_file.write(command + '\n')
+        log_file.flush()
+
+        result = subprocess.run(arguments, stdout=log_file, stderr=subprocess.STDOUT, encoding='utf-8', env=env, cwd=build_dir_path)
+
+        if result.returncode != 0:
+            logging.error("Building of GCC libraries failed, check the log file.")
+            sys.exit(1)
+
+    logging.info('Finished building of GCC libraries.')
 
 
 def find_library_object_files(library_path: str) -> list[str]:
@@ -167,6 +281,8 @@ def parse_gcc_version(gcc_executable: str) -> str:
 
     return result.stdout.strip().splitlines()[0].split()[-1].strip()
 
+def generate_buildlib_workspace():
+    pass
 
 # This functions works only for libgcc so far.
 def generate_libgcc_prerequisites(cfg: PrerequisitesGeneratorConfiguration):
@@ -322,19 +438,45 @@ def build_libgcc(cfg: BuilderConfiguration):
             logging.error("Error while building libgcc:\n%s", result.stdout)
             sys.exit(1)
 
-
-ARGPARSE_COMMAND_PREPARE = "prepare"
+ARGPARSE_COMMAND_PREPARE_STAGE1 = "prepare-stage1"
+ARGPARSE_COMMAND_PREPARE_STAGE2 = "prepare-stage2"
 ARGPARSE_COMMAND_BUILD = "build"
 
 
 def main():
-    default_triplet = os.path.basename(__file__).rsplit("-", maxsplit=1)[0]
+    # Derive a triplet from script's name and try to locate a path to a GCC binary.
+    triplet = os.path.basename(__file__).rsplit("-", maxsplit=1)[0]
+
+    gcc_binary_name = '{}-gcc'.format(triplet)
+    gcc_binary_path = shutil.which(gcc_binary_name)
+
+    if gcc_binary_path:
+        logging.info("Found GCC in PATH: %s", gcc_binary_path)
+    else:
+        gcc_binary_path = Path(__file__).parent.joinpath(gcc_binary_name)
+        if gcc_binary_path.exists():
+            logging.info("Found GCC in a local directory: %s", str(gcc_binary_path))
+        else:
+            logging.error("Cannot find GCC in PATH or in a local directory.")
+            return 1
+
+    # Create command line arguments parsers for these commands:
+    #
+    #     prepare-stage1
+    #     prepare-stage2
+    #     build
+    #
+
     parser = argparse.ArgumentParser(prog=os.path.basename(__file__), description="Buildlib for ARC-V GNU toolchain.")
     parser.add_argument("--debug", action="store_true")
     subparsers = parser.add_subparsers(dest="command")
 
-    # The arguments parser for the prerequisites generator.
-    parser_prepare = subparsers.add_parser(ARGPARSE_COMMAND_PREPARE, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_prepare = subparsers.add_parser(ARGPARSE_COMMAND_PREPARE_STAGE1, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_prepare.add_argument("--workspace-dir-path", type=str, required=True, metavar="PATH")
+    parser_prepare.add_argument("--gcc-sources-dir-path", type=str, required=True, metavar="PATH")
+    parser_prepare.add_argument("--picolibc-sources-dir-path", type=str, required=True, metavar="PATH")
+
+    parser_prepare = subparsers.add_parser(ARGPARSE_COMMAND_PREPARE_STAGE2, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_prepare.add_argument("--build-log-path", type=str, required=True, metavar="PATH")
     parser_prepare.add_argument("--build-dir-path", type=str, required=True, metavar="PATH")
     parser_prepare.add_argument("--gcc-sources-dir-path", type=str, required=True, metavar="PATH")
@@ -342,15 +484,16 @@ def main():
     parser_prepare.add_argument(
         "--buildlib-dir-path", type=str, default="buildlib", metavar="PATH", help="Output directory for buildlib prerequisites"
     )
-    parser_prepare.add_argument("--triplet", type=str, default=default_triplet, help="A toolchain triplet")
+    parser_prepare.add_argument("--tmp-dir-path", type=str, default="tmp", metavar="PATH", help="A temporary directory for build files")
+    parser_prepare.add_argument("--no-build", action="store_true", help="Skip a build stage")
+    parser_prepare.add_argument("--triplet", type=str, default=triplet, help="A toolchain triplet")
     parser_prepare.add_argument("--clean", action="store_true")
 
-    # The arguments parser for the builder of libraries.
     parser_build = subparsers.add_parser(ARGPARSE_COMMAND_BUILD, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_build.add_argument("--buildlib-dir-path", type=str, default="buildlib", metavar="PATH", help="Path to buildlib prerequisites")
     parser_build.add_argument("--install-dir-path", type=str, default="output", metavar="PATH", help="Path to the output directory")
     parser_build.add_argument("--cflags", type=str, default="-g -O2", metavar="CFLAGS", help="Extra target flags for GCC")
-    parser_build.add_argument("--triplet", type=str, default=default_triplet, help="A toolchain triplet")
+    parser_build.add_argument("--triplet", type=str, default=triplet, help="A toolchain triplet")
     parser_build.add_argument("--no-libgcc", action="store_true")
     parser_build.add_argument("--no-libstdc++", action="store_true")
     parser_build.add_argument("--no-picolibc", action="store_true")
@@ -362,8 +505,18 @@ def main():
 
     if args.command is None:
         print(parser.print_help())
-    elif args.command == ARGPARSE_COMMAND_PREPARE:
-        configuration = PrerequisitesGeneratorConfiguration(
+    elif args.command == ARGPARSE_COMMAND_PREPARE_STAGE1:
+        cfg = PrepareGate1Configuration(
+            triplet=triplet,
+            gcc_binary_path=gcc_binary_path,
+            workspace_dir_path=os.path.abspath(args.workspace_dir_path),
+            gcc_sources_dir_path=os.path.abspath(args.gcc_sources_dir_path),
+            picolibc_sources_dir_path=os.path.abspath(args.picolibc_sources_dir_path)
+        )
+
+        prepare_stage1(cfg)
+    elif args.command == ARGPARSE_COMMAND_PREPARE_STAGE2:
+        cfg = PrerequisitesGeneratorConfiguration(
             triplet=args.triplet,
             build_log_path=os.path.abspath(args.build_log_path),
             build_dir_path=os.path.abspath(args.build_dir_path),
@@ -373,14 +526,14 @@ def main():
         )
 
         if args.clean:
-            logging.info("Removing buildlib directory: %s", configuration.buildlib_dir_path)
-            if os.path.exists(configuration.buildlib_dir_path):
-                shutil.rmtree(configuration.buildlib_dir_path)
+            logging.info("Removing buildlib directory: %s", cfg.buildlib_dir_path)
+            if os.path.exists(cfg.buildlib_dir_path):
+                shutil.rmtree(cfg.buildlib_dir_path)
 
-        generate_libgcc_prerequisites(configuration)
-        generate_picolibc_prerequisites(configuration)
+        generate_libgcc_prerequisites(cfg)
+        generate_picolibc_prerequisites(cfg)
     elif args.command == ARGPARSE_COMMAND_BUILD:
-        configuration = BuilderConfiguration(
+        cfg = BuilderConfiguration(
             triplet=args.triplet,
             buildlib_dir_path=os.path.abspath(args.buildlib_dir_path),
             install_dir_path=os.path.abspath(args.install_dir_path),
@@ -388,7 +541,7 @@ def main():
         )
 
         if not args.no_libgcc:
-            build_libgcc(configuration)
+            build_libgcc(cfg)
 
     return 0
 
