@@ -39,6 +39,7 @@ logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.ERROR)
 
 _tcf_help = '''\
 Usage: riscv64-snps-elf-tcf-gcc [-tcf=<TCF path>] [-tcf-debug]
+                                [-tcf-no-compressed] [-tcf-no-memory]
                                 [-tcf-help] [-tcf-buildlib=<path>]
                                 [<GCC options>]
 
@@ -48,6 +49,7 @@ Description of available options:
     -tcf-debug            enable printing of debug messages
     -tcf-help             show this help message
     -tcf-no-compressed    remove extensions for compressed instructions from march
+    -tcf-no-memory        do not set memory layout variables through -defsym for .ld file
     -tcf-buildlib=<path>  pass a path to a directory with a buildlib configuration
     <GCC options>         all other options a passed directly to GCC
 '''
@@ -63,6 +65,7 @@ def main():
     tcf_filename = None
     tcf_options = []
     tcf_no_compressed = False
+    tcf_no_memory = False
     triplet, tool = os.path.basename(__file__).split('-tcf-')
 
     # Parse arguments and find -tcf*=... options
@@ -74,6 +77,8 @@ def main():
             logging.getLogger().setLevel(logging.DEBUG)
         elif arg == '-tcf-no-compressed':
             tcf_no_compressed = True
+        elif arg == '-tcf-no-memory':
+            tcf_no_memory = True
         elif arg.startswith('-tcf-buildlib='):
             buildlib_dir = arg.split('=', maxsplit=1)[1]
             buildlib_dir_path = os.path.abspath(buildlib_dir)
@@ -90,10 +95,13 @@ def main():
             return 0
         else:
             filtered_arguments_current.append(arg)
-    
+
     if tcf_filename is not None:
         tcf = TCF(tcf_filename, no_compressed=tcf_no_compressed)
-        tcf_options = tcf.get_compile_options() + tcf.get_link_options()
+        tcf_options = tcf.get_compile_options()
+
+    if not tcf_no_memory:
+        tcf_options.extend(tcf.get_memory_options())
 
     # Generate GCC binary name
     binary_name = '{}-{}'.format(triplet, tool)

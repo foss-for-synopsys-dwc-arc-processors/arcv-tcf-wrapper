@@ -39,7 +39,7 @@ class TCF:
         self._no_compressed = no_compressed
         self._init_root_node()
         self._init_compile_options()
-        self._init_link_options()
+        self._init_memory_options()
 
     def _init_root_node(self):
         try:
@@ -101,9 +101,9 @@ class TCF:
 
         logging.debug('compile options extracted: %s', str(self._compile_options_list))
 
-    def _init_link_options(self):
+    def _init_memory_options(self):
         # Extract ICCM and DCCM configurations
-        self._link_options_list = []
+        self._memory_options_list = []
         nsim_node = self._root_node.find("./configuration[@name='nSIM']/string")
 
         if nsim_node is None:
@@ -125,25 +125,25 @@ class TCF:
         #     .data size       datamem_len     __ram_size      dccm_size
         self._iccm_base = nsim_options_map.get('iccm0_base', None)
         if self._iccm_base is not None:
-            self._link_options_list.append('-Wl,-defsym=txtmem_addr={}'.format(self._iccm_base))
-            self._link_options_list.append('-Wl,-defsym=__flash={}'.format(self._iccm_base))
+            self._memory_options_list.append('-Wl,-defsym=txtmem_addr={}'.format(self._iccm_base))
+            self._memory_options_list.append('-Wl,-defsym=__flash={}'.format(self._iccm_base))
 
         self._iccm_size = nsim_options_map.get('iccm0_size', None)
         if self._iccm_size is not None:
-            self._link_options_list.append('-Wl,-defsym=txtmem_len={}'.format(self._iccm_size))
-            self._link_options_list.append('-Wl,-defsym=__flash_size={}'.format(self._iccm_size))
+            self._memory_options_list.append('-Wl,-defsym=txtmem_len={}'.format(self._iccm_size))
+            self._memory_options_list.append('-Wl,-defsym=__flash_size={}'.format(self._iccm_size))
 
         self._dccm_base = nsim_options_map.get('dccm_base', None)
         if self._dccm_base is not None:
-            self._link_options_list.append('-Wl,-defsym=datamem_addr={}'.format(self._dccm_base))
-            self._link_options_list.append('-Wl,-defsym=__ram={}'.format(self._dccm_base))
+            self._memory_options_list.append('-Wl,-defsym=datamem_addr={}'.format(self._dccm_base))
+            self._memory_options_list.append('-Wl,-defsym=__ram={}'.format(self._dccm_base))
 
         self._dccm_size = nsim_options_map.get('dccm_size', None)
         if self._dccm_size is not None:
-            self._link_options_list.append('-Wl,-defsym=datamem_len={}'.format(self._dccm_size))
-            self._link_options_list.append('-Wl,-defsym=__ram_size={}'.format(self._dccm_size))
+            self._memory_options_list.append('-Wl,-defsym=datamem_len={}'.format(self._dccm_size))
+            self._memory_options_list.append('-Wl,-defsym=__ram_size={}'.format(self._dccm_size))
 
-        logging.debug('link options extracted: %s', str(self._link_options_list))
+        logging.debug('memory options extracted: %s', str(self._memory_options_list))
 
     def get_march(self) -> str:
         return self._march
@@ -195,5 +195,5 @@ class TCF:
     def get_compile_options(self) -> list[str]:
         return self._compile_options_list.copy()
 
-    def get_link_options(self) -> list[str]:
-        return self._link_options_list.copy()
+    def get_memory_options(self) -> list[str]:
+        return self._memory_options_list.copy()
