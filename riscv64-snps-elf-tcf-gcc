@@ -32,6 +32,9 @@ import logging
 import os
 import subprocess
 import sys
+
+sys.dont_write_bytecode = True
+
 from arcgnulib import TCF
 
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.ERROR)

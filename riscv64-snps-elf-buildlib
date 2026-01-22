@@ -38,6 +38,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
 from typing import Optional
+
+sys.dont_write_bytecode = True
+
 from arcgnulib import TCF
 
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
