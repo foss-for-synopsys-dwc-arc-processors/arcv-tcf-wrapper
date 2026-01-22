@@ -340,6 +340,7 @@ class Builder:
 
             options_file.write(" ".join(cflags) + "\n")
 
+
 DEFAULT_MTUNE = "rocket"
 DEFAULT_MCMODEL = "medlow"
 DEFAULT_FLASH_ADDR = "0x0"
@@ -385,7 +386,6 @@ def main():
                 tcf_cflags.append(flag)
         cflags = "{} {}".format(" ".join(tcf_cflags), cflags)
 
-
     if args.march is not None:
         march = args.march
 
@@ -397,11 +397,11 @@ def main():
 
     if args.mcmodel is not None:
         mcmodel = args.mcmodel
-    
+
     if None in [march, mabi, mtune, mcmodel]:
         logging.error("All target options must be defined.")
         return 1
-    
+
     logging.info("Final target options:\n-march=%s -mabi=%s -mtune=%s -mcmodel=%s", march, mabi, mtune, mcmodel)
     logging.info("Final cflags:\n%s", cflags)
 
@@ -445,9 +445,11 @@ def main():
 
     return 0
 
+
 def get_triplet() -> str:
     # Derive a triplet from script's name and try to locate a path to a GCC binary.
     return os.path.basename(__file__).rsplit("-", maxsplit=1)[0]
+
 
 def get_gcc_path() -> str:
     gcc_name = "{}-gcc".format(get_triplet())
@@ -462,8 +464,9 @@ def get_gcc_path() -> str:
         else:
             logging.error("Cannot find GCC in PATH or in a local directory.")
             return 1
-    
+
     return str(gcc_path)
+
 
 class FixedArgumentDefaultsHelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
     def _get_help_string(self, action):
@@ -472,8 +475,11 @@ class FixedArgumentDefaultsHelpFormatter(argparse.ArgumentDefaultsHelpFormatter)
             help = help.replace(r" (default: %(default)s)", "")
         return help
 
+
 def get_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog=os.path.basename(__file__), description="Buildlib for ARC-V GNU toolchain.", formatter_class=FixedArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        prog=os.path.basename(__file__), description="Buildlib for ARC-V GNU toolchain.", formatter_class=FixedArgumentDefaultsHelpFormatter
+    )
     parser.add_argument("--output", type=str, required=True, metavar="PATH", help="A path to output directory")
     parser.add_argument("--tcf", type=str, metavar="TCF", help="A path to a TCF configuration file")
     parser.add_argument("--march", type=str, metavar="ARCH", help="Value for --march target option")
@@ -482,9 +488,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mcmodel", type=str, metavar="CMODEL", help="Value for --mcmodel target option")
     parser.add_argument("--gcc-sources-git-branch", type=str, default=DEFAULT_GIT_BRANCH, metavar="PATH", help="A release branch for GCC")
     parser.add_argument("--gcc-sources-dir-path", type=str, metavar="PATH", help="A path to GCC sources (overrides --gcc-sources-git-branch)")
-    parser.add_argument(
-        "--picolibc-sources-git-branch", type=str, default=DEFAULT_GIT_BRANCH, metavar="PATH", help="A release branch for Picolibc"
-    )
+    parser.add_argument("--picolibc-sources-git-branch", type=str, default=DEFAULT_GIT_BRANCH, metavar="PATH", help="A release branch for Picolibc")
     parser.add_argument(
         "--picolibc-sources-dir-path", type=str, metavar="PATH", help="A path to Picolibc sources (overrides --picolibc-sources-git-branch)"
     )
@@ -498,6 +502,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--debug", action="store_true")
 
     return parser
+
 
 if __name__ == "__main__":
     sys.exit(main())

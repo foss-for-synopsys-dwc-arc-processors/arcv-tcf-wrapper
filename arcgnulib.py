@@ -33,8 +33,9 @@ import sys
 import xml.etree.ElementTree as ET
 from typing import Optional
 
+
 class TCF:
-    def __init__(self, filename: str, no_compressed: bool=False):
+    def __init__(self, filename: str, no_compressed: bool = False):
         self._filename = filename
         self._no_compressed = no_compressed
         self._init_root_node()
@@ -44,7 +45,7 @@ class TCF:
     def _init_root_node(self):
         try:
             self._tree = ET.parse(self._filename)
-            logging.debug('opened TCF: %s', self._filename)
+            logging.debug("opened TCF: %s", self._filename)
         except FileNotFoundError:
             logging.error('File "%s" is not found.', self._filename)
             sys.exit(1)
@@ -56,7 +57,7 @@ class TCF:
         options_node = self._root_node.find("./configuration[@name='gcc_compiler']/string")
 
         if options_node is None:
-            logging.error('gcc_compiler configuration is not found.')
+            logging.error("gcc_compiler configuration is not found.")
             sys.exit(1)
 
         self._compile_options_list = []
@@ -66,40 +67,40 @@ class TCF:
         self._march = None
         self._mtune = None
         self._mabi = None
-        self._mcmodel = 'medlow'
+        self._mcmodel = "medlow"
 
         for option in compile_options_list_raw:
-            if option.startswith('-march='):
-                self._march = option.split('=')[1].lower()
+            if option.startswith("-march="):
+                self._march = option.split("=")[1].lower()
                 if self._no_compressed:
-                    candidates = ['c', 'zca', 'zcb', 'zcf', 'zcd', 'zcmp', 'zcmt']
+                    candidates = ["c", "zca", "zcb", "zcf", "zcd", "zcmp", "zcmt"]
                     extensions = self.get_extensions()
                     extensions = list(filter(lambda x: x not in candidates, extensions))
-                    self._march = '_'.join(extensions)
-                option = '-march=' + self._march
-            elif option.startswith('-mtune='):
-                self._mtune = option.split('=')[1].lower()
-            elif option.startswith('-mabi='):
-                self._mabi = option.split('=')[1].lower()
+                    self._march = "_".join(extensions)
+                option = "-march=" + self._march
+            elif option.startswith("-mtune="):
+                self._mtune = option.split("=")[1].lower()
+            elif option.startswith("-mabi="):
+                self._mabi = option.split("=")[1].lower()
             self._compile_options_list.append(option)
 
         if self._march is None:
-            logging.error('-march is not found in TCF.')
+            logging.error("-march is not found in TCF.")
             sys.exit(1)
 
         if self._mtune is None:
-            logging.error('-mtune is not found in TCF.')
+            logging.error("-mtune is not found in TCF.")
             sys.exit(1)
 
         if self._mabi is None:
-            logging.error('-mabi is not found in TCF.')
+            logging.error("-mabi is not found in TCF.")
             sys.exit(1)
 
         # Generate -mcmodel for RV64 targets
-        if 'rv64' in self._march:
-            self._mcmodel = 'medany'
+        if "rv64" in self._march:
+            self._mcmodel = "medany"
 
-        logging.debug('compile options extracted: %s', str(self._compile_options_list))
+        logging.debug("compile options extracted: %s", str(self._compile_options_list))
 
     def _init_memory_options(self):
         # Extract ICCM and DCCM configurations
@@ -107,12 +108,12 @@ class TCF:
         nsim_node = self._root_node.find("./configuration[@name='nSIM']/string")
 
         if nsim_node is None:
-            logging.error('nSIM configuration is not found.')
+            logging.error("nSIM configuration is not found.")
             sys.exit(1)
 
         nsim_options_map = {}
         for nsim_option in nsim_node.text.split():
-            key, value = nsim_option.strip().split('=', maxsplit=1)
+            key, value = nsim_option.strip().split("=", maxsplit=1)
             nsim_options_map[key] = value
 
         # Newlib/Picolibc toolchains and nSIM use different symbols
@@ -123,48 +124,48 @@ class TCF:
         #     .text size       txtmem_len      __flash_size    iccm0_size
         #     .data address    datamem_addr    __ram           dccm_base
         #     .data size       datamem_len     __ram_size      dccm_size
-        self._iccm_base = nsim_options_map.get('iccm0_base', None)
+        self._iccm_base = nsim_options_map.get("iccm0_base", None)
         if self._iccm_base is not None:
-            self._memory_options_list.append('-Wl,-defsym=txtmem_addr={}'.format(self._iccm_base))
-            self._memory_options_list.append('-Wl,-defsym=__flash={}'.format(self._iccm_base))
+            self._memory_options_list.append("-Wl,-defsym=txtmem_addr={}".format(self._iccm_base))
+            self._memory_options_list.append("-Wl,-defsym=__flash={}".format(self._iccm_base))
 
-        self._iccm_size = nsim_options_map.get('iccm0_size', None)
+        self._iccm_size = nsim_options_map.get("iccm0_size", None)
         if self._iccm_size is not None:
-            self._memory_options_list.append('-Wl,-defsym=txtmem_len={}'.format(self._iccm_size))
-            self._memory_options_list.append('-Wl,-defsym=__flash_size={}'.format(self._iccm_size))
+            self._memory_options_list.append("-Wl,-defsym=txtmem_len={}".format(self._iccm_size))
+            self._memory_options_list.append("-Wl,-defsym=__flash_size={}".format(self._iccm_size))
 
-        self._dccm_base = nsim_options_map.get('dccm_base', None)
+        self._dccm_base = nsim_options_map.get("dccm_base", None)
         if self._dccm_base is not None:
-            self._memory_options_list.append('-Wl,-defsym=datamem_addr={}'.format(self._dccm_base))
-            self._memory_options_list.append('-Wl,-defsym=__ram={}'.format(self._dccm_base))
+            self._memory_options_list.append("-Wl,-defsym=datamem_addr={}".format(self._dccm_base))
+            self._memory_options_list.append("-Wl,-defsym=__ram={}".format(self._dccm_base))
 
-        self._dccm_size = nsim_options_map.get('dccm_size', None)
+        self._dccm_size = nsim_options_map.get("dccm_size", None)
         if self._dccm_size is not None:
-            self._memory_options_list.append('-Wl,-defsym=datamem_len={}'.format(self._dccm_size))
-            self._memory_options_list.append('-Wl,-defsym=__ram_size={}'.format(self._dccm_size))
+            self._memory_options_list.append("-Wl,-defsym=datamem_len={}".format(self._dccm_size))
+            self._memory_options_list.append("-Wl,-defsym=__ram_size={}".format(self._dccm_size))
 
-        logging.debug('memory options extracted: %s', str(self._memory_options_list))
+        logging.debug("memory options extracted: %s", str(self._memory_options_list))
 
     def get_march(self) -> str:
         return self._march
 
     def get_family(self) -> str:
-        for family in 'rv32i', 'rv32e', 'rv64i':
+        for family in "rv32i", "rv32e", "rv64i":
             if self._march.startswith(family):
                 return family
 
-        raise ValueError('march does not start with a correct family')
+        raise ValueError("march does not start with a correct family")
 
     def get_extensions(self) -> list[str]:
         family = self.get_family()
-        march = self._march[len(family):]
+        march = self._march[len(family) :]
         extensions = [family]
 
-        for extension in march.split('_'):
-            extension = extension.replace('_', '')
+        for extension in march.split("_"):
+            extension = extension.replace("_", "")
             if len(extension) == 0:
                 continue
-            if extension[0] in ('z', 'x'):
+            if extension[0] in ("z", "x"):
                 extensions.append(extension)
             else:
                 extensions.extend(list(extension))
@@ -179,7 +180,7 @@ class TCF:
 
     def get_mcmodel(self) -> str:
         return self._mcmodel
-    
+
     def get_iccm_base(self) -> Optional[str]:
         return self._iccm_base
 
