@@ -1,0 +1,10 @@
+[tool.black]
+target-version = ['py35']
+line-length = 150
+include = '''
+(
+  riscv64-snps-elf-tcf-gcc
+  | riscv64-snps-elf-buildlib
+  | arcgnulib.py
+)
+'''
