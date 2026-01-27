@@ -357,8 +357,6 @@ class Builder:
             options_file.write(" ".join(cflags) + "\n")
 
 
-DEFAULT_MTUNE = "rocket"
-DEFAULT_MCMODEL = "medlow"
 DEFAULT_FLASH_ADDR = "0x0"
 DEFAULT_FLASH_SIZE = "128K"
 DEFAULT_RAM_ADDR = "0x40000000"
@@ -411,12 +409,19 @@ def main():
     if args.mtune is not None:
         mtune = args.mtune
 
+    if None in [march, mabi, mtune]:
+        logging.error("All mandatory target options must be defined: -march, -mabi or -mtune.")
+        return 1
+
     if args.mcmodel is not None:
         mcmodel = args.mcmodel
 
-    if None in [march, mabi, mtune, mcmodel]:
-        logging.error("All target options must be defined.")
-        return 1
+    # Derive a default memory model from -march
+    if mcmodel is None:
+        if march.startswith("rv32"):
+            mcmodel = "medlow"
+        else:
+            mcmodel = "medany"
 
     logging.info("Final target options:\n-march=%s -mabi=%s -mtune=%s -mcmodel=%s", march, mabi, mtune, mcmodel)
     logging.info("Final cflags:\n%s", cflags)
@@ -498,10 +503,10 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--output", type=str, required=True, metavar="PATH", help="A path to output directory")
     parser.add_argument("--tcf", type=str, metavar="TCF", help="A path to a TCF configuration file")
-    parser.add_argument("--march", type=str, metavar="ARCH", help="Value for --march target option")
-    parser.add_argument("--mabi", type=str, metavar="ABI", help="Value for --mabi target option")
-    parser.add_argument("--mtune", type=str, metavar="TUNE", help="Value for --mtune target option")
-    parser.add_argument("--mcmodel", type=str, metavar="CMODEL", help="Value for --mcmodel target option")
+    parser.add_argument("--march", "-march", type=str, metavar="ARCH", help="Value for --march target option")
+    parser.add_argument("--mabi", "-mabi", type=str, metavar="ABI", help="Value for --mabi target option")
+    parser.add_argument("--mtune", "-mtune", type=str, metavar="TUNE", help="Value for --mtune target option")
+    parser.add_argument("--mcmodel", "-mcmodel", type=str, metavar="CMODEL", help="Value for --mcmodel target option")
     parser.add_argument("--gcc-sources-git-branch", type=str, default=DEFAULT_GIT_BRANCH, metavar="PATH", help="A release branch for GCC")
     parser.add_argument("--gcc-sources-dir-path", type=str, metavar="PATH", help="A path to GCC sources (overrides --gcc-sources-git-branch)")
     parser.add_argument("--picolibc-sources-git-branch", type=str, default=DEFAULT_GIT_BRANCH, metavar="PATH", help="A release branch for Picolibc")
