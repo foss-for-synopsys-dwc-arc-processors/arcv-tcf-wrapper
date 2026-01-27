@@ -87,6 +87,7 @@ class Builder:
 
     def build_picolibc(self):
         self._output_dir_path.mkdir(exist_ok=True)
+        self._remove_directory(self._picolibc_sources_dir_path)
 
         if self._cfg.picolibc_sources_dir_path != None:
             self._create_picolibc_sources_symlink()
@@ -95,7 +96,8 @@ class Builder:
 
         # Create a build directory.
         build_dir_path = self._output_dir_path / "build-picolibc"
-        build_dir_path.mkdir(exist_ok=True)
+        self._remove_directory(build_dir_path)
+        build_dir_path.mkdir()
         logging.info("Creating a build directory: %s", build_dir_path)
 
         # Generate a picolibc-cross.txt file for Meson build system.
@@ -147,6 +149,14 @@ class Builder:
         arguments = ["ninja", "-C", str(build_dir_path), "install"]
         logging.info("Installing Picolibc library.")
         self._run_with_log_file(arguments, build_dir_path, "picolibc-install.log")
+
+    def _remove_directory(self, path: str):
+        path = Path(path)
+
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
+            path.unlink(missing_ok=True)
 
     def _create_picolibc_sources_symlink(self):
         self._picolibc_sources_dir_path.symlink_to(self._cfg.picolibc_sources_dir_path, True)
@@ -223,9 +233,12 @@ class Builder:
         return dedent(template)
 
     def build_gcc(self):
-        assert self._include_dir_path.exists()
+        if not self._include_dir_path.exists():
+            logging.error("Picolibc include directory is not installed.")
+            sys.exit(1)
 
         self._output_dir_path.mkdir(exist_ok=True)
+        self._remove_directory(self._gcc_sources_dir_path)
 
         if self._cfg.gcc_sources_dir_path != None:
             self._create_gcc_sources_symlink()
@@ -233,10 +246,10 @@ class Builder:
             self._clone_gcc_sources()
 
         # Create a build directory.
-        gcc_build_dir_name = "build-gcc"
-        gcc_build_dir_path = self._output_dir_path / gcc_build_dir_name
-        gcc_build_dir_path.mkdir(exist_ok=True)
-        logging.info("Creating a build directory: %s", gcc_build_dir_path)
+        build_dir_path = self._output_dir_path / "build-gcc"
+        self._remove_directory(build_dir_path)
+        build_dir_path.mkdir()
+        logging.info("Creating a build directory: %s", build_dir_path)
 
         # Now we are going to configure GCC for a random non-multilib target. We need it
         # only for logs so it does not matter what particular target is used.
@@ -274,17 +287,17 @@ class Builder:
         ]
 
         logging.info("Configuring GCC.")
-        self._run_with_log_file(arguments, gcc_build_dir_path, "gcc-config.log")
+        self._run_with_log_file(arguments, build_dir_path, "gcc-config.log")
 
         # Now we are ready to build libgcc and libstdc++.
         arguments = ["make", "-j", str(self._cfg.nproc), "all-target-libgcc", "all-target-libstdc++-v3"]
         logging.info("Building libgcc and libstdc++.")
-        self._run_with_log_file(arguments, gcc_build_dir_path, "gcc-build.log")
+        self._run_with_log_file(arguments, build_dir_path, "gcc-build.log")
 
         # Now we are ready to build libgcc and libstdc++.
         arguments = ["make", "install-target-libgcc", "install-target-libstdc++-v3"]
         logging.info("Installing libgcc and libstdc++.")
-        self._run_with_log_file(arguments, gcc_build_dir_path, "gcc-install.log")
+        self._run_with_log_file(arguments, build_dir_path, "gcc-install.log")
 
         # Generate and save buildlib.specs file.
         specs_file_content = """\
