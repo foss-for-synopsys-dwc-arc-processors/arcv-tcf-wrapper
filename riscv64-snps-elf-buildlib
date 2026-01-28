@@ -153,7 +153,7 @@ class Builder:
     def _remove_directory(self, path: str):
         path = Path(path)
 
-        if path.is_dir():
+        if path.is_dir() and not path.is_symlink():
             shutil.rmtree(path)
         else:
             path.unlink(missing_ok=True)
@@ -441,7 +441,7 @@ def main():
     if args.picolibc_sources_dir_path is None:
         picolibc_sources_dir_path = None
     else:
-        picolibc_sources_dir_path = Path(args.gcc_sources_dir_path).absolute()
+        picolibc_sources_dir_path = Path(args.picolibc_sources_dir_path).absolute()
 
     cfg = BuilderConfiguration(
         triplet=triplet,
@@ -490,7 +490,7 @@ def get_gcc_path() -> str:
             logging.info("Found GCC in a local directory: %s", str(gcc_path))
         else:
             logging.error("Cannot find GCC in PATH or in a local directory.")
-            return 1
+            sys.exit(1)
 
     return str(gcc_path)
 
