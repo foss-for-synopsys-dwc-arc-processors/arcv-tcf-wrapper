@@ -245,6 +245,8 @@ class Builder:
         else:
             self._clone_gcc_sources()
 
+        self._download_gcc_dependencies()
+
         # Create a build directory.
         build_dir_path = self._output_dir_path / "build-gcc"
         self._remove_directory(build_dir_path)
@@ -324,8 +326,8 @@ class Builder:
         logging.info("Finished building and installing libraries.")
 
     def _create_gcc_sources_symlink(self):
-        self._gcc_sources_dir_path.symlink_to(self._cfg.gcc_sources_dir_path, True)
         logging.info("Creating a symbolic link to GCC sources: %s", self._cfg.gcc_sources_dir_path)
+        self._gcc_sources_dir_path.symlink_to(self._cfg.gcc_sources_dir_path, True)
 
     def _clone_gcc_sources(self):
         logging.info("Cloning GCC repository.")
@@ -333,6 +335,7 @@ class Builder:
         arguments = ["git", "clone", "--depth", "1", "--branch", self._cfg.gcc_sources_git_branch, git_url, str(self._gcc_sources_dir_path)]
         self._run_with_log_file(arguments, self._output_dir_path, "gcc-clone.log")
 
+    def _download_gcc_dependencies(self):
         logging.info("Downloading GCC dependencies.")
         arguments = ["./contrib/download_prerequisites"]
         self._run_with_log_file(arguments, str(self._gcc_sources_dir_path), "gcc-dependencies.log")
