@@ -41,7 +41,7 @@ from typing import Optional
 
 sys.dont_write_bytecode = True
 
-from arcgnulib import TCF
+from arcgnulib import TCF, CompilerInfo
 
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
 
@@ -232,7 +232,7 @@ class Builder:
 
         return dedent(template)
 
-    def build_gcc(self, with_libstdcpp = True):
+    def build_gcc(self, with_libstdcpp=True):
         if not self._include_dir_path.exists():
             logging.error("Picolibc include directory is not installed.")
             sys.exit(1)
@@ -376,10 +376,12 @@ DEFAULT_NPROC = 1
 
 
 def main():
-    triplet = get_triplet()
-    gcc_path = get_gcc_path()
+    script_triplet = os.path.basename(__file__).rsplit("-", maxsplit=1)[0].strip()
+    compiler_name = "{}-{}".format(script_triplet, "gcc")
+    compiler_info = CompilerInfo(compiler_name)
+    gcc_path = compiler_info.get_compiler_path()
+    gcc_triplet = compiler_info.get_compiler_triplet()
     parser = get_parser()
-
     args = parser.parse_args()
 
     if args.debug:
@@ -447,7 +449,7 @@ def main():
         picolibc_sources_dir_path = Path(args.picolibc_sources_dir_path).absolute()
 
     cfg = BuilderConfiguration(
-        triplet=triplet,
+        triplet=gcc_triplet,
         gcc_binary_path=gcc_path,
         output_dir_path=Path(args.output).absolute(),
         gcc_sources_git_branch=args.gcc_sources_git_branch,
@@ -474,28 +476,6 @@ def main():
         builder.clean()
 
     return 0
-
-
-def get_triplet() -> str:
-    # Derive a triplet from script's name and try to locate a path to a GCC binary.
-    return os.path.basename(__file__).rsplit("-", maxsplit=1)[0]
-
-
-def get_gcc_path() -> str:
-    gcc_name = "{}-gcc".format(get_triplet())
-    gcc_path = shutil.which(gcc_name)
-
-    if gcc_path:
-        logging.info("Found GCC in PATH: %s", gcc_path)
-    else:
-        gcc_path = Path(__file__).parent / gcc_name
-        if gcc_path.exists():
-            logging.info("Found GCC in a local directory: %s", str(gcc_path))
-        else:
-            logging.error("Cannot find GCC in PATH or in a local directory.")
-            sys.exit(1)
-
-    return str(gcc_path)
 
 
 class FixedArgumentDefaultsHelpFormatter(argparse.ArgumentDefaultsHelpFormatter):

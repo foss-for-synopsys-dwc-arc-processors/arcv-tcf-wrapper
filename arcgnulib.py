@@ -29,8 +29,12 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging
+import os.path
+import shutil
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from typing import Optional
 
 
@@ -198,3 +202,44 @@ class TCF:
 
     def get_memory_options(self) -> list[str]:
         return self._memory_options_list.copy()
+
+
+class CompilerInfo:
+    def __init__(self, compiler_filename: str):
+        # Try to locate a path to GCC binary
+        self._compiler_name = compiler_filename
+        self._compiler_path = shutil.which(self._compiler_name)
+        logging.info("Trying to locate a tool: %s", self._compiler_name)
+
+        if self._compiler_path:
+            logging.info("Found GCC in PATH: %s", self._compiler_path)
+        else:
+            self._compiler_path = Path(__file__).parent / self._compiler_name
+            if self._compiler_path.exists():
+                logging.info("Found GCC in a local directory: %s", str(self._compiler_path))
+            else:
+                logging.error("Cannot find GCC in PATH or in a local directory.")
+                sys.exit(1)
+
+        # Try to determine a real GCC triplet. Original script name may be
+        # an alias to a real GCC binary with correct triplet. We can determine
+        # a real GCC triplet only through -dumpmachine option.
+        try:
+            result = subprocess.run([self._compiler_path, "-dumpmachine"], capture_output=True, encoding="utf-8")
+            if result.returncode != 0:
+                logging.error("Cannot retrieve a triplet from GCC:\n%s", result.stderr)
+                sys.exit(1)
+            self._compiler_triplet = result.stdout.strip()
+            logging.info("Retrieved a real triplet of GCC: %s", self._compiler_triplet)
+        except FileNotFoundError:
+            logging.error("GCC path is invalid: %s", self._compiler_path)
+            sys.exit(1)
+
+    def get_compiler_name(self) -> str:
+        return self._compiler_name
+
+    def get_compiler_path(self) -> str:
+        return self._compiler_path
+
+    def get_compiler_triplet(self) -> str:
+        return self._compiler_triplet

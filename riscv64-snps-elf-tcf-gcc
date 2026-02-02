@@ -35,7 +35,7 @@ import sys
 
 sys.dont_write_bytecode = True
 
-from arcgnulib import TCF
+from arcgnulib import TCF, CompilerInfo
 
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.ERROR)
 
@@ -71,7 +71,12 @@ def main():
     tcf_options = []
     tcf_no_compressed = False
     tcf_no_memory = False
-    triplet, tool = os.path.basename(__file__).split("-tcf-")
+
+    gcc_triplet, tool = os.path.basename(__file__).split("-tcf-")
+    compiler_name = "{}-{}".format(gcc_triplet, tool)
+    compiler_info = CompilerInfo(compiler_name)
+    gcc_path = compiler_info.get_compiler_path()
+    gcc_triplet = compiler_info.get_compiler_triplet()
 
     # Parse arguments and find -tcf*=... options
     for arg in original_arguments:
@@ -89,7 +94,7 @@ def main():
             buildlib_dir_path = os.path.abspath(buildlib_dir)
             specs_file_path = os.path.join(buildlib_dir_path, "buildlib.specs")
             libgcc_path = os.path.join(buildlib_dir_path, "lib", "gcc")
-            libc_path = os.path.join(buildlib_dir_path, triplet, "lib")
+            libc_path = os.path.join(buildlib_dir_path, gcc_triplet, "lib")
             filtered_arguments_current.extend(["-specs={}".format(specs_file_path), "-B{}".format(libgcc_path), "-B{}".format(libc_path)])
         elif arg == "-tcf-help":
             print_tcf_help()
@@ -104,22 +109,8 @@ def main():
     if not tcf_no_memory:
         tcf_options.extend(tcf.get_memory_options())
 
-    # Generate GCC binary name
-    binary_name = "{}-{}".format(triplet, tool)
-    logging.debug("binary name: %s", binary_name)
-
-    # Find the binary - whether it's in script's directory or in PATH?
-    script_directory = os.path.dirname(os.path.realpath(__file__))
-    binary_path = os.path.join(script_directory, binary_name)
-    logging.debug("trying to locate %s", binary_path)
-
-    # Try to use GCC from PATH
-    if not os.path.exists(binary_path):
-        binary_path = binary_name
-        logging.debug("path is not found, assume that GCC in PATH")
-
     # Call GCC binary with all arguments
-    subprocess_arguments = [binary_path, *filtered_arguments_before, *tcf_options, *filtered_arguments_after]
+    subprocess_arguments = [gcc_path, *filtered_arguments_before, *tcf_options, *filtered_arguments_after]
     print(" ".join(subprocess_arguments))
 
     exit_code = 0
@@ -127,7 +118,7 @@ def main():
     try:
         exit_code = subprocess.call(subprocess_arguments)
     except FileNotFoundError:
-        logging.error("cannot find GCC binary: %s", binary_path)
+        logging.error("cannot find GCC binary: %s", gcc_path)
         exit_code = 1
 
     return exit_code
