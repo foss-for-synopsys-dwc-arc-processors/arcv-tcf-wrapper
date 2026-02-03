@@ -217,6 +217,7 @@ class CompilerInfo:
             self._compiler_path = Path(__file__).parent / self._compiler_name
             if self._compiler_path.exists():
                 logging.info("Found GCC in a local directory: %s", str(self._compiler_path))
+                self._compiler_path = str(self._compiler_path)
             else:
                 logging.error("Cannot find GCC in PATH or in a local directory.")
                 sys.exit(1)
