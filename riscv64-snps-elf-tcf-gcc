@@ -48,13 +48,13 @@ Usage: riscv64-snps-elf-tcf-gcc [-tcf=<TCF path>] [-tcf-debug]
 
 Description of available options:
 
-    -tcf=<path>           pass a path to a TCF file for parsing GCC options
-    -tcf-debug            enable printing of debug messages
-    -tcf-help             show this help message
-    -tcf-no-compressed    remove extensions for compressed instructions from march
-    -tcf-no-memory        do not set memory layout variables through -defsym for .ld file
-    -tcf-buildlib=<path>  pass a path to a directory with a buildlib configuration
-    <GCC options>         all other options a passed directly to GCC
+    -tcf=<path>               pass a path to a TCF file for parsing GCC options
+    -tcf-debug                enable printing of debug messages
+    -tcf-help                 show this help message
+    -tcf-no-compressed        remove extensions for compressed instructions from march
+    -tcf-with-memory-defines  pass memory layout variables from TCF through -defsym for a default .ld file
+    -tcf-buildlib=<path>      pass a path to a directory with a buildlib configuration
+    <GCC options>             all other options a passed directly to GCC
 """
 
 
@@ -70,7 +70,7 @@ def main():
     tcf_filename = None
     tcf_options = []
     tcf_no_compressed = False
-    tcf_no_memory = False
+    tcf_no_memory = True
 
     gcc_triplet, tool = os.path.basename(__file__).split("-tcf-")
     compiler_name = "{}-{}".format(gcc_triplet, tool)
@@ -87,8 +87,8 @@ def main():
             logging.getLogger().setLevel(logging.DEBUG)
         elif arg == "-tcf-no-compressed":
             tcf_no_compressed = True
-        elif arg == "-tcf-no-memory":
-            tcf_no_memory = True
+        elif arg == "-tcf-with-memory-defines":
+            tcf_no_memory = False
         elif arg.startswith("-tcf-buildlib="):
             buildlib_dir = arg.split("=", maxsplit=1)[1]
             buildlib_dir_path = os.path.abspath(buildlib_dir)
