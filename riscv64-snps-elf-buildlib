@@ -490,8 +490,8 @@ def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=os.path.basename(__file__), description="Buildlib for ARC-V GNU toolchain.", formatter_class=FixedArgumentDefaultsHelpFormatter
     )
-    parser.add_argument("--output", type=str, required=True, metavar="PATH", help="A path to output directory")
-    parser.add_argument("--tcf", type=str, metavar="TCF", help="A path to a TCF configuration file")
+    parser.add_argument("--output", "-bd", "-buildlib_dir", type=str, required=True, metavar="PATH", help="A path to output directory")
+    parser.add_argument("--tcf", "-tcf", type=str, metavar="TCF", help="A path to a TCF configuration file")
     parser.add_argument("--march", "-march", type=str, metavar="ARCH", help="Value for -march target option")
     parser.add_argument("--mabi", "-mabi", type=str, metavar="ABI", help="Value for -mabi target option")
     parser.add_argument("--mtune", "-mtune", type=str, metavar="TUNE", help="Value for -mtune target option")
@@ -499,7 +499,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cflags", type=str, default=DEFAULT_CFLAGS, metavar="CFLAGS", help="Extra target flags for GCC")
     parser.add_argument("--gcc-sources-git-branch", type=str, default=DEFAULT_GIT_BRANCH, metavar="PATH", help="A release branch for GCC")
     parser.add_argument("--gcc-sources-dir-path", type=str, metavar="PATH", help="A path to GCC sources (overrides --gcc-sources-git-branch)")
-    parser.add_argument("--no-libstdcpp", action="store_true", help="Do not build libstdc++ library")
+    parser.add_argument("--no-libstdcpp", "-nocplus", action="store_true", help="Do not build libstdc++ library")
     parser.add_argument("--picolibc-sources-git-branch", type=str, default=DEFAULT_GIT_BRANCH, metavar="PATH", help="A release branch for Picolibc")
     parser.add_argument(
         "--picolibc-sources-dir-path", type=str, metavar="PATH", help="A path to Picolibc sources (overrides --picolibc-sources-git-branch)"
@@ -508,9 +508,9 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--flash-size", type=str, default=DEFAULT_FLASH_SIZE, metavar="SIZE", help="A default value for a flash size")
     parser.add_argument("--ram-addr", type=str, default=DEFAULT_RAM_ADDR, metavar="ADDR", help="A default value for a ram address")
     parser.add_argument("--ram-size", type=str, default=DEFAULT_RAM_SIZE, metavar="SIZE", help="A default value for a ram size")
-    parser.add_argument("--nproc", type=int, default=DEFAULT_NPROC, metavar="N", help="Number of threads for building")
-    parser.add_argument("--no-clean", action="store_true", help="Do not delete build artifacts")
-    parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--nproc", "-j", type=int, default=DEFAULT_NPROC, metavar="N", help="Number of threads for building")
+    parser.add_argument("--no-clean", "-noclean", action="store_true", help="Do not delete build artifacts")
+    parser.add_argument("--debug", "-v", action="store_true")
 
     return parser
 
