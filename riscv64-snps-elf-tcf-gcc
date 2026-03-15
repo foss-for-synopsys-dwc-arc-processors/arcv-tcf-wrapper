@@ -103,7 +103,7 @@ def main():
             filtered_arguments_current.append(arg)
 
     if tcf_filename is not None:
-        tcf = TCF(tcf_filename, no_compressed=tcf_no_compressed)
+        tcf = TCF.from_file(tcf_filename, no_compressed=tcf_no_compressed)
         tcf_options = tcf.get_compile_options()
 
         if not tcf_no_memory:
