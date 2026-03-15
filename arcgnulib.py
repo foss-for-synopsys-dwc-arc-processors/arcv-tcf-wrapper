@@ -39,22 +39,22 @@ from typing import Optional
 
 
 class TCF:
-    def __init__(self, filename: str, no_compressed: bool = False):
-        self._filename = filename
+    def __init__(self, content: str, no_compressed: bool = False):
+        self._root_node = ET.fromstring(content)
         self._no_compressed = no_compressed
-        self._init_root_node()
         self._init_compile_options()
         self._init_memory_options()
 
-    def _init_root_node(self):
+    @classmethod
+    def from_file(cls, filename: str, *args, **kwargs):
         try:
-            self._tree = ET.parse(self._filename)
-            logging.debug("opened TCF: %s", self._filename)
+            content = open(filename, "rb").read()
+            logging.debug("opened TCF: %s", filename)
         except FileNotFoundError:
-            logging.error('File "%s" is not found.', self._filename)
+            logging.error('File "%s" is not found.', filename)
             sys.exit(1)
 
-        self._root_node = self._tree.getroot()
+        return cls(content, *args, **kwargs)
 
     def _init_compile_options(self):
         # Extract compile options

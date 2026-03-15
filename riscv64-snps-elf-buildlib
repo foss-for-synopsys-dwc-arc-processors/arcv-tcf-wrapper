@@ -397,7 +397,7 @@ def main():
     cflags = args.cflags
 
     if args.tcf is not None:
-        tcf = TCF(args.tcf)
+        tcf = TCF.from_file(args.tcf)
         march = tcf.get_march()
         mabi = tcf.get_mabi()
         mtune = tcf.get_mtune()
