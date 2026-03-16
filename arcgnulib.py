@@ -37,6 +37,17 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional
 
+class TCFError(Exception):
+    pass
+
+class TCFCompilerConfigurationNotFoundError(TCFError):
+    pass
+
+class TCFMemoryConfigurationNotFoundError(TCFError):
+    pass
+
+class TCFTargetOptionError(TCFError):
+    pass
 
 class TCF:
     def __init__(self, content: str, no_compressed: bool = False):
@@ -47,28 +58,29 @@ class TCF:
 
     @classmethod
     def from_file(cls, filename: str, *args, **kwargs):
-        try:
-            content = open(filename, "rb").read()
-            logging.debug("opened TCF: %s", filename)
-        except FileNotFoundError:
-            logging.error('File "%s" is not found.', filename)
-            sys.exit(1)
+        """Create a TCF instance from a file.
 
-        return cls(content, *args, **kwargs)
+        Raises:
+            FileNotFoundError: If the file does not exist.
+        """
+        logging.debug("Opening TCF: %s", filename)
+        with open(filename, "rb") as f:
+            content = f.read()
+            return cls(content, *args, **kwargs)
 
     def _init_compile_options(self):
         # Extract compile options
         options_node = self._root_node.find("./configuration[@name='gcc_compiler']/string")
 
         if options_node is None:
-            logging.error("gcc_compiler configuration is not found.")
-            sys.exit(1)
+            raise TCFCompilerConfigurationNotFoundError("gcc_compiler configuration is not found.")
 
         self._compile_options_list = []
         compile_options_list_raw = [option.strip() for option in options_node.text.split()]
 
-        # Generate -march, -mtune and -mabi
+        # Generate -march, -mtune, -mabi and -mcmodel values
         self._march = None
+        self._march_family = None
         self._mtune = None
         self._mabi = None
         self._mcmodel = "medlow"
@@ -89,16 +101,20 @@ class TCF:
             self._compile_options_list.append(option)
 
         if self._march is None:
-            logging.error("-march is not found in TCF.")
-            sys.exit(1)
+            raise TCFTargetOptionError("-march is not found in TCF.")
+
+        for family in "rv32i", "rv32e", "rv64i":
+            if self._march.startswith(family):
+                self._march_family = family
+                break
+        else:
+            raise TCFTargetOptionError("march does not start with a correct family: {}".format(self._march))
 
         if self._mtune is None:
-            logging.error("-mtune is not found in TCF.")
-            sys.exit(1)
+            raise TCFTargetOptionError("-mtune is not found in TCF.")
 
         if self._mabi is None:
-            logging.error("-mabi is not found in TCF.")
-            sys.exit(1)
+            raise TCFTargetOptionError("-mabi is not found in TCF.")
 
         # Generate -mcmodel for RV64 targets
         if "rv64" in self._march:
@@ -112,8 +128,7 @@ class TCF:
         nsim_node = self._root_node.find("./configuration[@name='nSIM']/string")
 
         if nsim_node is None:
-            logging.error("nSIM configuration is not found.")
-            sys.exit(1)
+            raise TCFMemoryConfigurationNotFoundError("nSIM configuration is not found.")
 
         nsim_options_map = {}
         for nsim_option in nsim_node.text.split():
@@ -154,11 +169,7 @@ class TCF:
         return self._march
 
     def get_family(self) -> str:
-        for family in "rv32i", "rv32e", "rv64i":
-            if self._march.startswith(family):
-                return family
-
-        raise ValueError("march does not start with a correct family")
+        return self._march_family
 
     def get_extensions(self) -> list[str]:
         family = self.get_family()
