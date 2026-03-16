@@ -50,6 +50,8 @@ class TCFTargetOptionError(TCFError):
     pass
 
 class TCF:
+    COMPRESSED_EXTENSIONS = ["c", "zca", "zcb", "zcf", "zcd", "zcmp", "zcmt"]
+
     def __init__(self, content: str, no_compressed: bool = False):
         self._root_node = ET.fromstring(content)
         self._no_compressed = no_compressed
@@ -89,9 +91,8 @@ class TCF:
             if option.startswith("-march="):
                 self._march = option.split("=")[1].lower()
                 if self._no_compressed:
-                    candidates = ["c", "zca", "zcb", "zcf", "zcd", "zcmp", "zcmt"]
                     extensions = self.get_extensions()
-                    extensions = list(filter(lambda x: x not in candidates, extensions))
+                    extensions = list(filter(lambda x: x not in self.COMPRESSED_EXTENSIONS, extensions))
                     self._march = "_".join(extensions)
                 option = "-march=" + self._march
             elif option.startswith("-mtune="):
