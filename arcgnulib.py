@@ -145,7 +145,7 @@ class TCF:
         self._memory_options_list = []
         nsim_node = self._root_node.find("./configuration[@name='nSIM']/string")
 
-        if nsim_node is None:
+        if nsim_node is None or nsim_node.text is None:
             raise TCFMemoryConfigurationNotFoundError("nSIM configuration is not found.")
 
         nsim_options_map = {}
