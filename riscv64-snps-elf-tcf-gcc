@@ -35,6 +35,7 @@ import sys
 
 sys.dont_write_bytecode = True
 
+import arcgnulib
 from arcgnulib import TCF, CompilerInfo
 
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.ERROR)
@@ -74,7 +75,16 @@ def main():
 
     gcc_triplet, tool = os.path.basename(__file__).split("-tcf-")
     compiler_name = "{}-{}".format(gcc_triplet, tool)
-    compiler_info = CompilerInfo(compiler_name)
+
+    try:
+        compiler_info = CompilerInfo(compiler_name)
+    except arcgnulib.CompilerInfoGCCNotFoundError as exc:
+        logging.error(str(exc))
+        return 1
+    except arcgnulib.CompilerInfoGCCExecutionError as exc:
+        logging.error(str(exc))
+        return 1
+
     gcc_path = compiler_info.get_compiler_path()
     gcc_triplet = compiler_info.get_compiler_triplet()
 
