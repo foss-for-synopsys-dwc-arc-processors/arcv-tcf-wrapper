@@ -225,6 +225,11 @@ class TCF:
     def get_memory_options(self) -> list[str]:
         return self._memory_options_list.copy()
 
+class CompilerInfoGCCNotFoundError(Exception):
+    pass
+
+class CompilerInfoGCCExecutionError(Exception):
+    pass
 
 class CompilerInfo:
     def __init__(self, compiler_filename: str):
@@ -241,22 +246,19 @@ class CompilerInfo:
                 logging.info("Found GCC in a local directory: %s", str(self._compiler_path))
                 self._compiler_path = str(self._compiler_path)
             else:
-                logging.error("Cannot find GCC in PATH or in a local directory.")
-                sys.exit(1)
+                raise CompilerInfoGCCNotFoundError("Cannot find GCC in PATH or in a local directory.")
 
         # Try to determine a real GCC triplet. Original script name may be
         # an alias to a real GCC binary with correct triplet. We can determine
         # a real GCC triplet only through -dumpmachine option.
         try:
-            result = subprocess.run([self._compiler_path, "-dumpmachine"], capture_output=True, encoding="utf-8")
-            if result.returncode != 0:
-                logging.error("Cannot retrieve a triplet from GCC:\n%s", result.stderr)
-                sys.exit(1)
+            result = subprocess.run([self._compiler_path, "-dumpmachine"], capture_output=True, encoding="utf-8", check=True)
             self._compiler_triplet = result.stdout.strip()
             logging.info("Retrieved a real triplet of GCC: %s", self._compiler_triplet)
-        except FileNotFoundError:
-            logging.error("GCC path is invalid: %s", self._compiler_path)
-            sys.exit(1)
+        except subprocess.CalledProcessError as exc:
+            raise CompilerInfoGCCExecutionError("Cannot retrieve a triplet from GCC:\n{}".format(exc.stderr)) from exc
+        except FileNotFoundError as exc:
+            raise CompilerInfoGCCNotFoundError("GCC path is invalid: {}".format(self._compiler_path)) from exc
 
     def get_compiler_name(self) -> str:
         return self._compiler_name
