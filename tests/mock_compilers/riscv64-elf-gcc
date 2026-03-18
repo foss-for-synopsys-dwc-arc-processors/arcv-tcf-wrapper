@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+
+import sys
+
+if "-dumpmachine" in sys.argv:
+    print("riscv64-snps-elf", end="")
+    sys.exit(0)
+
+sys.exit(0)
