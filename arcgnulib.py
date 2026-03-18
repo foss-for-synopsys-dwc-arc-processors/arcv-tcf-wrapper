@@ -51,10 +51,10 @@ class TCFTargetOptionError(TCFError):
 class TCF:
     COMPRESSED_EXTENSIONS = ["c", "zca", "zcb", "zcf", "zcd", "zcmp", "zcmt"]
 
-    def __init__(self, content: str, no_compressed: bool = False):
+    def __init__(self, content: str):
         self._root_node = ET.fromstring(content)
-        self._no_compressed = no_compressed
         self._init_compile_options()
+        self._init_march_no_compressed()
         self._init_memory_options()
 
     @classmethod
@@ -76,8 +76,7 @@ class TCF:
         if options_node is None:
             raise TCFCompilerConfigurationNotFoundError("gcc_compiler configuration is not found.")
 
-        self._compile_options_list = []
-        compile_options_list_raw = [option.strip() for option in options_node.text.split()]
+        cflags = [option.strip() for option in options_node.text.split()]
 
         # Generate -march, -mtune, -mabi and -mcmodel values
         self._march = None
@@ -85,20 +84,18 @@ class TCF:
         self._mtune = None
         self._mabi = None
         self._mcmodel = "medlow"
+        self._extra_cflags = []
 
-        for option in compile_options_list_raw:
+        for option in cflags:
             if option.startswith("-march="):
                 self._march = option.split("=")[1].lower()
-                if self._no_compressed:
-                    extensions = self.get_extensions()
-                    extensions = list(filter(lambda x: x not in self.COMPRESSED_EXTENSIONS, extensions))
-                    self._march = "_".join(extensions)
                 option = "-march=" + self._march
             elif option.startswith("-mtune="):
                 self._mtune = option.split("=")[1].lower()
             elif option.startswith("-mabi="):
                 self._mabi = option.split("=")[1].lower()
-            self._compile_options_list.append(option)
+            else:
+                self._extra_cflags.append(option)
 
         if self._march is None:
             raise TCFTargetOptionError("-march is not found in TCF.")
@@ -120,7 +117,28 @@ class TCF:
         if "rv64" in self._march:
             self._mcmodel = "medany"
 
-        logging.debug("compile options extracted: %s", str(self._compile_options_list))
+    def _init_march_no_compressed(self):
+        march_extensions = self._get_march_extensions()
+        filtered = list(filter(lambda x: x not in self.COMPRESSED_EXTENSIONS, march_extensions))
+        self._march_no_compressed = "_".join([
+            self._march_family,
+            *filtered,
+        ])
+
+    def _get_march_extensions(self) -> list[str]:
+        march_extensions_str = self._march[len(self._march_family):]
+        march_extensions = []
+
+        for extension in march_extensions_str.split("_"):
+            extension = extension.replace("_", "")
+            if len(extension) == 0:
+                continue
+            if extension[0] in ("z", "x"):
+                march_extensions.append(extension)
+            else:
+                march_extensions.extend(list(extension))
+
+        return march_extensions
 
     def _init_memory_options(self):
         # Extract ICCM and DCCM configurations
@@ -165,27 +183,14 @@ class TCF:
 
         logging.debug("memory options extracted: %s", str(self._memory_options_list))
 
-    def get_march(self) -> str:
+    def get_march(self, no_compressed: bool = False) -> str:
+        if no_compressed:
+            return self._march_no_compressed
+
         return self._march
 
     def get_family(self) -> str:
         return self._march_family
-
-    def get_extensions(self) -> list[str]:
-        family = self.get_family()
-        march = self._march[len(family) :]
-        extensions = [family]
-
-        for extension in march.split("_"):
-            extension = extension.replace("_", "")
-            if len(extension) == 0:
-                continue
-            if extension[0] in ("z", "x"):
-                extensions.append(extension)
-            else:
-                extensions.extend(list(extension))
-
-        return extensions
 
     def get_mabi(self) -> str:
         return self._mabi
@@ -208,8 +213,14 @@ class TCF:
     def get_dccm_size(self) -> Optional[str]:
         return self._dccm_size
 
-    def get_compile_options(self) -> list[str]:
-        return self._compile_options_list.copy()
+    def get_compile_options(self, no_compressed: bool = False) -> list[str]:
+        return [
+            "-march={}".format(self.get_march(no_compressed)),
+            "-mtune={}".format(self.get_mtune()),
+            "-mabi={}".format(self.get_mabi()),
+            "-mcmodel={}".format(self.get_mcmodel()),
+            *self._extra_cflags,
+        ]
 
     def get_memory_options(self) -> list[str]:
         return self._memory_options_list.copy()
