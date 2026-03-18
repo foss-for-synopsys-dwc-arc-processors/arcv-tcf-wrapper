@@ -1,7 +1,3 @@
-*
-!.gitignore
-!README.md
-!riscv64-snps-elf-tcf-gcc
-!riscv64-snps-elf-buildlib
-!arcgnulib.py
-!pyproject.toml
+__pycache__/
+.pytest_cache/
+.vscode/
