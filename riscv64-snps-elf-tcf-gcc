@@ -51,6 +51,7 @@ Description of available options:
 
     -tcf=<path>               pass a path to a TCF file for parsing GCC options
     -tcf-debug                enable printing of debug messages
+    -tcf-dry-run              do not execute the command, only print it
     -tcf-help                 show this help message
     -tcf-no-compressed        remove extensions for compressed instructions from march
     -tcf-with-memory-defines  pass memory layout variables from TCF through -defsym for a default .ld file
@@ -72,6 +73,7 @@ def main():
     tcf_options = []
     tcf_no_compressed = False
     tcf_no_memory = True
+    tcf_dry_run = False
 
     gcc_triplet, tool = os.path.basename(__file__).split("-tcf-")
     compiler_name = "{}-{}".format(gcc_triplet, tool)
@@ -93,6 +95,8 @@ def main():
         if arg.startswith("-tcf="):
             tcf_filename = arg.split("=", maxsplit=1)[1]
             filtered_arguments_current = filtered_arguments_after
+        elif arg == "-tcf-dry-run":
+            tcf_dry_run = True
         elif arg == "-tcf-debug":
             logging.getLogger().setLevel(logging.DEBUG)
         elif arg == "-tcf-no-compressed":
@@ -121,15 +125,18 @@ def main():
 
     # Call GCC binary with all arguments
     subprocess_arguments = [gcc_path, *filtered_arguments_before, *tcf_options, *filtered_arguments_after]
-    print(" ".join(subprocess_arguments))
+    logging.debug("Running GCC:\n%s", " ".join(subprocess_arguments))
 
     exit_code = 0
 
-    try:
-        exit_code = subprocess.call(subprocess_arguments)
-    except FileNotFoundError:
-        logging.error("cannot find GCC binary: %s", gcc_path)
-        exit_code = 1
+    if not tcf_dry_run:
+        try:
+            exit_code = subprocess.call(subprocess_arguments)
+        except FileNotFoundError:
+            logging.error("cannot find GCC binary: %s", gcc_path)
+            exit_code = 1
+    else:
+        print(" ".join(subprocess_arguments))
 
     return exit_code
 
