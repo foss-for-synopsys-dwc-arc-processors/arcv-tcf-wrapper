@@ -29,7 +29,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging
-import os.path
 import shutil
 import subprocess
 import sys
