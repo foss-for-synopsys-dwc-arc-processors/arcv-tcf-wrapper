@@ -75,6 +75,14 @@ def main():
     tcf_no_memory = True
     tcf_dry_run = False
 
+    if "-tcf-help" in original_arguments:
+        print_tcf_help()
+        return 0
+
+    if "-tcf-debug" in original_arguments:
+        logging.getLogger().setLevel(logging.DEBUG)
+        original_arguments = list(filter(lambda x: x != "-tcf-debug", original_arguments))
+
     gcc_triplet, tool = os.path.basename(__file__).split("-tcf-")
     compiler_name = "{}-{}".format(gcc_triplet, tool)
 
@@ -97,8 +105,6 @@ def main():
             filtered_arguments_current = filtered_arguments_after
         elif arg == "-tcf-dry-run":
             tcf_dry_run = True
-        elif arg == "-tcf-debug":
-            logging.getLogger().setLevel(logging.DEBUG)
         elif arg == "-tcf-no-compressed":
             tcf_no_compressed = True
         elif arg == "-tcf-with-memory-defines":
@@ -110,9 +116,6 @@ def main():
             libgcc_path = os.path.join(buildlib_dir_path, "lib", "gcc")
             libc_path = os.path.join(buildlib_dir_path, gcc_triplet, "lib")
             filtered_arguments_current.extend(["-specs={}".format(specs_file_path), "-B{}".format(libgcc_path), "-B{}".format(libc_path)])
-        elif arg == "-tcf-help":
-            print_tcf_help()
-            return 0
         else:
             filtered_arguments_current.append(arg)
 
