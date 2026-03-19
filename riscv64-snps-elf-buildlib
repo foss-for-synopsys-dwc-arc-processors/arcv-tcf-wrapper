@@ -90,7 +90,7 @@ class Builder:
         self._output_dir_path.mkdir(exist_ok=True)
         self._remove_directory(self._picolibc_sources_dir_path)
 
-        if self._cfg.picolibc_sources_dir_path != None:
+        if self._cfg.picolibc_sources_dir_path is not None:
             self._create_picolibc_sources_symlink()
         else:
             self._clone_picolibc_sources()
@@ -241,7 +241,7 @@ class Builder:
         self._output_dir_path.mkdir(exist_ok=True)
         self._remove_directory(self._gcc_sources_dir_path)
 
-        if self._cfg.gcc_sources_dir_path != None:
+        if self._cfg.gcc_sources_dir_path is not None:
             self._create_gcc_sources_symlink()
         else:
             self._clone_gcc_sources()
@@ -507,9 +507,9 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mtune", "-mtune", type=str, metavar="TUNE", help="Value for -mtune target option")
     parser.add_argument("--mcmodel", "-mcmodel", type=str, metavar="CMODEL", help="Value for -mcmodel target option")
     parser.add_argument("--cflags", type=str, default=DEFAULT_CFLAGS, metavar="CFLAGS", help="Extra target flags for GCC")
+    parser.add_argument("--no-libstdcpp", "-nocplus", action="store_true", help="Do not build libstdc++ library")
     parser.add_argument("--gcc-sources-git-branch", type=str, default=DEFAULT_GIT_BRANCH, metavar="PATH", help="A release branch for GCC")
     parser.add_argument("--gcc-sources-dir-path", type=str, metavar="PATH", help="A path to GCC sources (overrides --gcc-sources-git-branch)")
-    parser.add_argument("--no-libstdcpp", "-nocplus", action="store_true", help="Do not build libstdc++ library")
     parser.add_argument("--picolibc-sources-git-branch", type=str, default=DEFAULT_GIT_BRANCH, metavar="PATH", help="A release branch for Picolibc")
     parser.add_argument(
         "--picolibc-sources-dir-path", type=str, metavar="PATH", help="A path to Picolibc sources (overrides --picolibc-sources-git-branch)"
