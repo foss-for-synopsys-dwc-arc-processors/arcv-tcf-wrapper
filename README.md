@@ -45,17 +45,19 @@ from a TCF file and passes them to GCC. The wrapper introduces a list of extra o
 An example of using the wrapper with a TCF:
 
 ```
-$ riscv64-snps-elf-tcf-gcc -g -O2 -tcf=rmx100_dmips.tcf -specs=picolibc.specs --oslib=semihost --crt0=semihost main.c -o main.elf
-
-/u/svc-arcoss_auto/gnu_builds/toolchain-daily-build/latest/riscv64-snps-elf-picolibc/riscv64-snps-elf-picolibc/bin/riscv64-snps-elf-gcc -g -O2 -mno-strict-align -march=rv32i_zicsr_zifencei_zihintpause_a_zca_m_zcb_zcmp_zcmt_zba_zbb_zbs_zicond_zicbom_zicbop -mabi=ilp32 -mtune=arc-v-rmx-100-series --param arcv-mpy-option=1c -specs=picolibc.specs --oslib=semihost --crt0=semihost main.c -o main.elf
+$ riscv64-snps-elf-tcf-gcc -g -O2 -tcf=rmx100_dmips.tcf -tcf-debug -specs=picolibc.specs --oslib=semihost --crt0=semihost main.c -o main.elf
+...
+DEBUG: Running GCC:
+<...>/riscv64-snps-elf-gcc -g -O2 -march=rv32i_zicsr_zifencei_zihintpause_a_zca_m_zcb_zcmp_zcmt_zba_zbb_zbs_zicond_zicbom_zicbop -mtune=arc-v-rmx-100-series -mabi=ilp32 -mcmodel=medlow -mno-strict-align --param arcv-mpy-option=1c -specs=picolibc.specs --oslib=semihost --crt0=semihost main.c -o main.elf
 ```
 
 Pass memory definitions for a linker script:
 
 ```
-$ riscv64-snps-elf-tcf-gcc -g -O2 -tcf=rmx100_dmips.tcf -tcf-with-memory-defines -specs=picolibc.specs --oslib=semihost --crt0=semihost main.c -o main.elf
-
-/u/svc-arcoss_auto/gnu_builds/toolchain-daily-build/latest/riscv64-snps-elf-picolibc/riscv64-snps-elf-picolibc/bin/riscv64-snps-elf-gcc -g -O2 -mno-strict-align -march=rv32i_zicsr_zifencei_zihintpause_a_zca_m_zcb_zcmp_zcmt_zba_zbb_zbs_zicond_zicbom_zicbop -mabi=ilp32 -mtune=arc-v-rmx-100-series --param arcv-mpy-option=1c -Wl,-defsym=txtmem_addr=0x0 -Wl,-defsym=__flash=0x0 -Wl,-defsym=txtmem_len=0x8000 -Wl,-defsym=__flash_size=0x8000 -Wl,-defsym=datamem_addr=0x80000000 -Wl,-defsym=__ram=0x80000000 -Wl,-defsym=datamem_len=0x8000 -Wl,-defsym=__ram_size=0x8000 -specs=picolibc.specs --oslib=semihost --crt0=semihost main.c -o main.elf
+$ riscv64-snps-elf-tcf-gcc -g -O2 -tcf=rmx100_dmips.tcf -tcf-debug -tcf-with-memory-defines -specs=picolibc.specs --oslib=semihost --crt0=semihost main.c -o main.elf
+...
+DEBUG: Running GCC:
+<...>/riscv64-snps-elf-gcc -g -O2 -march=rv32i_zicsr_zifencei_zihintpause_a_zca_m_zcb_zcmp_zcmt_zba_zbb_zbs_zicond_zicbom_zicbop -mtune=arc-v-rmx-100-series -mabi=ilp32 -mcmodel=medlow -mno-strict-align --param arcv-mpy-option=1c -Wl,-defsym=txtmem_addr=0x0 -Wl,-defsym=__flash=0x0 -Wl,-defsym=txtmem_len=0x8000 -Wl,-defsym=__flash_size=0x8000 -Wl,-defsym=datamem_addr=0x80000000 -Wl,-defsym=__ram=0x80000000 -Wl,-defsym=datamem_len=0x8000 -Wl,-defsym=__ram_size=0x8000 -specs=picolibc.specs --oslib=semihost --crt0=semihost main.c -o main.elf
 ```
 
 ## The Buildlib tool
