@@ -31,22 +31,26 @@
 import logging
 import shutil
 import subprocess
-import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
+
 
 class TCFError(Exception):
     pass
 
+
 class TCFCompilerConfigurationNotFoundError(TCFError):
     pass
+
 
 class TCFMemoryConfigurationNotFoundError(TCFError):
     pass
 
+
 class TCFTargetOptionError(TCFError):
     pass
+
 
 class TCF:
     COMPRESSED_EXTENSIONS = ["c", "zca", "zcb", "zcf", "zcd", "zcmp", "zcmt"]
@@ -120,13 +124,15 @@ class TCF:
     def _init_march_no_compressed(self):
         march_extensions = self._get_march_extensions()
         filtered = list(filter(lambda x: x not in self.COMPRESSED_EXTENSIONS, march_extensions))
-        self._march_no_compressed = "_".join([
-            self._march_family,
-            *filtered,
-        ])
+        self._march_no_compressed = "_".join(
+            [
+                self._march_family,
+                *filtered,
+            ]
+        )
 
-    def _get_march_extensions(self) -> list[str]:
-        march_extensions_str = self._march[len(self._march_family):]
+    def _get_march_extensions(self) -> List[str]:
+        march_extensions_str = self._march[len(self._march_family) :]
         march_extensions = []
 
         for extension in march_extensions_str.split("_"):
@@ -213,7 +219,7 @@ class TCF:
     def get_dccm_size(self) -> Optional[str]:
         return self._dccm_size
 
-    def get_compile_options(self, no_compressed: bool = False) -> list[str]:
+    def get_compile_options(self, no_compressed: bool = False) -> List[str]:
         return [
             "-march={}".format(self.get_march(no_compressed)),
             "-mtune={}".format(self.get_mtune()),
@@ -222,14 +228,17 @@ class TCF:
             *self._extra_cflags,
         ]
 
-    def get_memory_options(self) -> list[str]:
+    def get_memory_options(self) -> List[str]:
         return self._memory_options_list.copy()
+
 
 class CompilerInfoGCCNotFoundError(Exception):
     pass
 
+
 class CompilerInfoGCCExecutionError(Exception):
     pass
+
 
 class CompilerInfo:
     def __init__(self, compiler_filename: str):
@@ -252,7 +261,9 @@ class CompilerInfo:
         # an alias to a real GCC binary with correct triplet. We can determine
         # a real GCC triplet only through -dumpmachine option.
         try:
-            result = subprocess.run([self._compiler_path, "-dumpmachine"], capture_output=True, encoding="utf-8", check=True)
+            result = subprocess.run(
+                [self._compiler_path, "-dumpmachine"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", check=True
+            )
             self._compiler_triplet = result.stdout.strip()
             logging.info("Retrieved a real triplet of GCC: %s", self._compiler_triplet)
         except subprocess.CalledProcessError as exc:
