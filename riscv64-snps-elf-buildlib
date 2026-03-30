@@ -37,7 +37,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
-from typing import Optional
+from typing import Optional, List
 
 sys.dont_write_bytecode = True
 
@@ -169,7 +169,7 @@ class Builder:
         arguments = ["git", "clone", "--depth", "1", "--branch", self._cfg.picolibc_sources_git_branch, git_url, str(self._picolibc_sources_dir_path)]
         self._run_with_log_file(arguments, self._output_dir_path, "picolibc-clone.log")
 
-    def _run_with_log_file(self, arguments: list[str], build_dir_path: str, log_file_name: str):
+    def _run_with_log_file(self, arguments: List[str], build_dir_path: str, log_file_name: str):
         log_file_path = self._output_dir_path / log_file_name
         with open(log_file_path, "w", encoding="utf-8") as log_file:
             command = " ".join(arguments)
