@@ -74,6 +74,23 @@ TCF_RV64_FEATURED = """<?xml version="1.0"?>
 </configuration>
 """
 
+TCF_RV32_SMDBLTRP = """<?xml version="1.0"?>
+<configuration>
+  <configuration name="gcc_compiler">
+    <string>
+      -mno-strict-align
+      -march=rv32i_zicsr_zifencei_zihintpause_a_zca_m_zcb_zcmp_zcmt_zba_zbb_zbs_zicond_zicbom_zicbop_smdbltrp
+      -mabi=ilp32
+      -mtune=arc-v-rmx-100-series
+      --param arcv-mpy-option=10c
+</string>
+  </configuration>
+  <configuration name="nSIM">
+    <string>iccm0_base=0x0 iccm0_size=0x20000 dccm_base=0x200000 dccm_size=0x8000</string>
+  </configuration>
+</configuration>
+"""
+
 
 class TestTCF:
     def test_rv32_minimal_base(self):
@@ -183,6 +200,16 @@ class TestTCF:
         assert tcf.get_mtune() == "arc-v-rpx-100-series"
         assert tcf.get_mabi() == "lp64d"
         assert tcf.get_mcmodel() == "medany"
+
+    def test_rv64_smdbltrp(self):
+        tcf = TCF(TCF_RV32_SMDBLTRP)
+        assert (
+            tcf.get_march(no_compressed=False) == "rv32i_zicsr_zifencei_zihintpause_a_zca_m_zcb_zcmp_zcmt_zba_zbb_zbs_zicond_zicbom_zicbop_smdbltrp"
+        )
+        assert tcf.get_march(no_compressed=True) == "rv32i_zicsr_zifencei_zihintpause_a_m_zba_zbb_zbs_zicond_zicbom_zicbop_smdbltrp"
+        assert tcf.get_mtune() == "arc-v-rmx-100-series"
+        assert tcf.get_mabi() == "ilp32"
+        assert tcf.get_mcmodel() == "medlow"
 
 
 class TestTCFExceptions:
