@@ -226,3 +226,9 @@ Now we can run the example in nSIM:
 $ nsimdrv -p nsim_isa_family=rv32 -p nsim_isa_ext=-all.i.m.a.c.zicsr -p nsim_semihosting=1 -p enable_exceptions=0 hello.elf
 Hello, World!
 ```
+
+## Run tests
+
+```shell
+$ python3 -m pytest -v
+```
