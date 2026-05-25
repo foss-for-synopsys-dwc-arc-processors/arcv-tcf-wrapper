@@ -139,7 +139,7 @@ class TCF:
             extension = extension.replace("_", "")
             if len(extension) == 0:
                 continue
-            if extension[0] in ("z", "x"):
+            if extension[0] in ("z", "x", "s"):
                 march_extensions.append(extension)
             else:
                 march_extensions.extend(list(extension))
