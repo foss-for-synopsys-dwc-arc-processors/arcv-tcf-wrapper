@@ -165,7 +165,7 @@ class Builder:
 
     def _clone_picolibc_sources(self):
         logging.info("Cloning Picolibc repository.")
-        git_url = "https://github.com/foss-for-synopsys-dwc-arc-processors/picolibc"
+        git_url = "https://github.com/foss-for-mips-arc-processors/picolibc"
         arguments = ["git", "clone", "--depth", "1", "--branch", self._cfg.picolibc_sources_git_branch, git_url, str(self._picolibc_sources_dir_path)]
         self._run_with_log_file(arguments, self._output_dir_path, "picolibc-clone.log")
 
@@ -332,7 +332,7 @@ class Builder:
 
     def _clone_gcc_sources(self):
         logging.info("Cloning GCC repository.")
-        git_url = "https://github.com/foss-for-synopsys-dwc-arc-processors/gcc"
+        git_url = "https://github.com/foss-for-mips-arc-processors/gcc"
         arguments = ["git", "clone", "--depth", "1", "--branch", self._cfg.gcc_sources_git_branch, git_url, str(self._gcc_sources_dir_path)]
         self._run_with_log_file(arguments, self._output_dir_path, "gcc-clone.log")
 
