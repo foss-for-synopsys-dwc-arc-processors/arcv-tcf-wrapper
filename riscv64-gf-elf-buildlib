@@ -79,7 +79,7 @@ class Builder:
         self._gcc_sources_dir_path = self._output_dir_path / "gcc"
 
         # Get a family and a system part from a triplet. For example:
-        #     riscv64-snps-elf -> (riscv64, snps)
+        #     riscv64-gf-elf -> (riscv64, gf)
         self._triplet_family, self._triplet_system = self._cfg.triplet.split("-")[:2]
 
         # Add a toolchain's GCC binary to PATH to make it visible for configure and make.

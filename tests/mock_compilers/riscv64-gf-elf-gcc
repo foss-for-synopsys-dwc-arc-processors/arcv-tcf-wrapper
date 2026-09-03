@@ -3,7 +3,7 @@
 import sys
 
 if "-dumpmachine" in sys.argv:
-    print("riscv64-snps-elf", end="")
+    print("riscv64-gf-elf", end="")
     sys.exit(0)
 
 sys.exit(0)

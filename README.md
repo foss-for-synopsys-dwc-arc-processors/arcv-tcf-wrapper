@@ -2,9 +2,9 @@
 
 This repository contains two useful scripts for the ARC-V GNU toolchain:
 
-1. The `riscv64-snps-elf-tcf-gcc` tool is a TCF wrapper for GCC for ARC-V targets.
+1. The `riscv64-gf-elf-tcf-gcc` tool is a TCF wrapper for GCC for ARC-V targets.
    It is intended to be used with TCF files originally prepared for MetaWare tools.
-2. The `riscv64-snps-elf-buildlib` tool allows building Picolibc, `libgcc`, and `libstdc++`
+2. The `riscv64-gf-elf-buildlib` tool allows building Picolibc, `libgcc`, and `libstdc++`
    for a particular set of target and optimization options. Then this configuration
    may be used for building applications using the TCF wrapper.
 
@@ -12,11 +12,11 @@ This repository contains two useful scripts for the ARC-V GNU toolchain:
 
 Copy all the scripts, including `arcgnulib.py`, to the `bin` directory of a toolchain or add
 a directory with the scripts to `PATH`. Note that both scripts try to locate
-`riscv64-snps-elf-gcc` in two places:
+`riscv64-gf-elf-gcc` in two places:
 
 1. **The same directory where the scripts reside.**
    
-   If the scripts' directory contains `riscv64-snps-elf-gcc`, then this binary is used.
+   If the scripts' directory contains `riscv64-gf-elf-gcc`, then this binary is used.
 2. **A directory in `PATH`.**
 
 Note that the scripts' prefix must match GCC's one. For example, if GCC binary is
@@ -45,19 +45,19 @@ from a TCF file and passes them to GCC. The wrapper introduces a list of extra o
 An example of using the wrapper with a TCF:
 
 ```
-$ riscv64-snps-elf-tcf-gcc -g -O2 -tcf=rmx100_dmips.tcf -tcf-debug -specs=picolibc.specs --oslib=semihost --crt0=semihost main.c -o main.elf
+$ riscv64-gf-elf-tcf-gcc -g -O2 -tcf=rmx100_dmips.tcf -tcf-debug -specs=picolibc.specs --oslib=semihost --crt0=semihost main.c -o main.elf
 ...
 DEBUG: Running GCC:
-<...>/riscv64-snps-elf-gcc -g -O2 -march=rv32i_zicsr_zifencei_zihintpause_a_zca_m_zcb_zcmp_zcmt_zba_zbb_zbs_zicond_zicbom_zicbop -mtune=arc-v-rmx-100-series -mabi=ilp32 -mcmodel=medlow -mno-strict-align --param arcv-mpy-option=1c -specs=picolibc.specs --oslib=semihost --crt0=semihost main.c -o main.elf
+<...>/riscv64-gf-elf-gcc -g -O2 -march=rv32i_zicsr_zifencei_zihintpause_a_zca_m_zcb_zcmp_zcmt_zba_zbb_zbs_zicond_zicbom_zicbop -mtune=arc-v-rmx-100-series -mabi=ilp32 -mcmodel=medlow -mno-strict-align --param arcv-mpy-option=1c -specs=picolibc.specs --oslib=semihost --crt0=semihost main.c -o main.elf
 ```
 
 Pass memory definitions for a linker script:
 
 ```
-$ riscv64-snps-elf-tcf-gcc -g -O2 -tcf=rmx100_dmips.tcf -tcf-debug -tcf-with-memory-defines -specs=picolibc.specs --oslib=semihost --crt0=semihost main.c -o main.elf
+$ riscv64-gf-elf-tcf-gcc -g -O2 -tcf=rmx100_dmips.tcf -tcf-debug -tcf-with-memory-defines -specs=picolibc.specs --oslib=semihost --crt0=semihost main.c -o main.elf
 ...
 DEBUG: Running GCC:
-<...>/riscv64-snps-elf-gcc -g -O2 -march=rv32i_zicsr_zifencei_zihintpause_a_zca_m_zcb_zcmp_zcmt_zba_zbb_zbs_zicond_zicbom_zicbop -mtune=arc-v-rmx-100-series -mabi=ilp32 -mcmodel=medlow -mno-strict-align --param arcv-mpy-option=1c -Wl,-defsym=txtmem_addr=0x0 -Wl,-defsym=__flash=0x0 -Wl,-defsym=txtmem_len=0x8000 -Wl,-defsym=__flash_size=0x8000 -Wl,-defsym=datamem_addr=0x80000000 -Wl,-defsym=__ram=0x80000000 -Wl,-defsym=datamem_len=0x8000 -Wl,-defsym=__ram_size=0x8000 -specs=picolibc.specs --oslib=semihost --crt0=semihost main.c -o main.elf
+<...>/riscv64-gf-elf-gcc -g -O2 -march=rv32i_zicsr_zifencei_zihintpause_a_zca_m_zcb_zcmp_zcmt_zba_zbb_zbs_zicond_zicbom_zicbop -mtune=arc-v-rmx-100-series -mabi=ilp32 -mcmodel=medlow -mno-strict-align --param arcv-mpy-option=1c -Wl,-defsym=txtmem_addr=0x0 -Wl,-defsym=__flash=0x0 -Wl,-defsym=txtmem_len=0x8000 -Wl,-defsym=__flash_size=0x8000 -Wl,-defsym=datamem_addr=0x80000000 -Wl,-defsym=__ram=0x80000000 -Wl,-defsym=datamem_len=0x8000 -Wl,-defsym=__ram_size=0x8000 -specs=picolibc.specs --oslib=semihost --crt0=semihost main.c -o main.elf
 ```
 
 ## The Buildlib tool
@@ -73,8 +73,8 @@ Here is a list of usage examples:
 * Build libraries for `rhx100_base.tcf` TCF template:
 
    ```plain
-   $ riscv64-snps-elf-buildlib --output rhx100_base --tcf rhx100_base.tcf --nproc 4
-   INFO: Found GCC in PATH: /SCRATCH/ykolerov/tools/gcc-arcv-elf-picolibc-latest/bin/riscv64-snps-elf-gcc
+   $ riscv64-gf-elf-buildlib --output rhx100_base --tcf rhx100_base.tcf --nproc 4
+   INFO: Found GCC in PATH: /SCRATCH/ykolerov/tools/gcc-arcv-elf-picolibc-latest/bin/riscv64-gf-elf-gcc
    INFO: Final target options:
    -march=rv32i_zicsr_zifencei_zihintpause_a_zca_m_zcb_zcmp_zba_zbb_zbs_zicond_zicbom_zicbop -mabi=ilp32 -mtune=arc-v-rhx-100-series -mcmodel=medlow
    INFO: Final cflags:
@@ -93,15 +93,15 @@ Here is a list of usage examples:
    INFO: Saving buildlib.specs.
    INFO: Finished building and installing libgcc and libstdc++.
 
-   $ riscv64-snps-elf-tcf-gcc -tcf=rhx100_base.tcf -tcf-buildlib=./rhx100_base -specs=picolibc.specs --oslib=semihost --crt0=semihost hello.c -o hello.elf
+   $ riscv64-gf-elf-tcf-gcc -tcf=rhx100_base.tcf -tcf-buildlib=./rhx100_base -specs=picolibc.specs --oslib=semihost --crt0=semihost hello.c -o hello.elf
    ```
 
 * Pass all target options explicitly without using a TCF and then build your application with the prebuilt libraries:
 
    ```
-   $ riscv64-snps-elf-buildlib --output buildlib --march rv32imac --mabi ilp32 --mtune arc-v-rmx-100-series --cflags="-g -O3" -j 4
+   $ riscv64-gf-elf-buildlib --output buildlib --march rv32imac --mabi ilp32 --mtune arc-v-rmx-100-series --cflags="-g -O3" -j 4
    ...
-   $ riscv64-snps-elf-tcf-gcc -march=rv32imac -mabi=ilp32 -mtune=arc-v-rmx-100-series -tcf-buildlib=./buildlib -specs=picolibc.specs --oslib=semihost --crt0=semihost hello.c -o hello.elf
+   $ riscv64-gf-elf-tcf-gcc -march=rv32imac -mabi=ilp32 -mtune=arc-v-rmx-100-series -tcf-buildlib=./buildlib -specs=picolibc.specs --oslib=semihost --crt0=semihost hello.c -o hello.elf
    ```
 
 Here is a list of all command line options:
@@ -137,7 +137,7 @@ Here is a list of all command line options:
 
 These steps are performed to build a custom configuration:
 
-* First, buildlib tries to find riscv64-snps-elf-gcc in PATH or in a local directory. It fails if GCC cannot be found.
+* First, buildlib tries to find riscv64-gf-elf-gcc in PATH or in a local directory. It fails if GCC cannot be found.
 * Create the main buildlib directory and build directories for Picolibc and GCC. Create symbolic links for Picolibc and GCC sources.
 * Configure, build, and install Picolibc and then GCC. All libraries are installed to the buildlib directory.
 * Delete symbolic links to sources and build directories for Picolibc and GCC (if `--no-clean` is not passed).
@@ -150,8 +150,8 @@ $ tree -d -L 3 buildlib
 buildlib
 ├── lib
 │   └── gcc
-│       └── riscv64-snps-elf
-├── riscv64-snps-elf
+│       └── riscv64-gf-elf
+├── riscv64-gf-elf
 │   ├── include
 │   │   ├── arpa
 │   │   ├── bits
@@ -176,8 +176,8 @@ buildlib
 To build and link an application with a custom library, you need to pass extra arguments:
 
 * `-specs=./buildlib/buildlib.specs` - include a `.specs` file which turns off default multilib rules.
-* `-isystem ./buildlib/riscv64-snps-elf/sys-include -isystem ./buildlib/riscv64-snps-elf/include` - use includes from a custom Picolibc build.
-* `-B./buildlib/lib/gcc -B./buildlib/riscv64-snps-elf/lib` - use custom libraries by default instead of original ones.
+* `-isystem ./buildlib/riscv64-gf-elf/sys-include -isystem ./buildlib/riscv64-gf-elf/include` - use includes from a custom Picolibc build.
+* `-B./buildlib/lib/gcc -B./buildlib/riscv64-gf-elf/lib` - use custom libraries by default instead of original ones.
 
 Now consider this example:
 
@@ -193,31 +193,31 @@ How to link an application with custom libraries (also, we pass
 `-Wl,-t` to ensure that custom libraries are linked with our application):
 
 ```
-$ riscv64-snps-elf-gcc \
+$ riscv64-gf-elf-gcc \
      -march=rv32imac \
      -mabi=ilp32 \
      -mtune=arc-v-rmx-100-series \
      -mcmodel=medlow \
-     -isystem ./buildlib/riscv64-snps-elf/sys-include \
-     -isystem ./buildlib/riscv64-snps-elf/include \
+     -isystem ./buildlib/riscv64-gf-elf/sys-include \
+     -isystem ./buildlib/riscv64-gf-elf/include \
      -B./buildlib/lib/gcc \
-     -B./buildlib/riscv64-snps-elf/lib \
+     -B./buildlib/riscv64-gf-elf/lib \
      -specs=picolibc.specs \
      -specs=buildlib.specs \
      --oslib=semihost \
      --crt0=semihost \
      hello.c -o hello.elf \
     -Wl,-t
-./buildlib/riscv64-snps-elf/lib/crt0-semihost.o
+./buildlib/riscv64-gf-elf/lib/crt0-semihost.o
 /tmp/ccUptbxg.o
-./buildlib/lib/gcc/riscv64-snps-elf/15.2.0/libgcc.a
-./buildlib/lib/gcc/riscv64-snps-elf/15.2.0/libgcc.a
-./buildlib/riscv64-snps-elf/lib/libc.a
-./buildlib/riscv64-snps-elf/lib/libsemihost.a
-./buildlib/lib/gcc/riscv64-snps-elf/15.2.0/libgcc.a
-./buildlib/riscv64-snps-elf/lib/libc.a
-./buildlib/riscv64-snps-elf/lib/libsemihost.a
-./buildlib/lib/gcc/riscv64-snps-elf/15.2.0/libgcc.a
+./buildlib/lib/gcc/riscv64-gf-elf/15.2.0/libgcc.a
+./buildlib/lib/gcc/riscv64-gf-elf/15.2.0/libgcc.a
+./buildlib/riscv64-gf-elf/lib/libc.a
+./buildlib/riscv64-gf-elf/lib/libsemihost.a
+./buildlib/lib/gcc/riscv64-gf-elf/15.2.0/libgcc.a
+./buildlib/riscv64-gf-elf/lib/libc.a
+./buildlib/riscv64-gf-elf/lib/libsemihost.a
+./buildlib/lib/gcc/riscv64-gf-elf/15.2.0/libgcc.a
 ```
 
 Now we can run the example in nSIM:

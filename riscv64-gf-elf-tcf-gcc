@@ -42,10 +42,10 @@ logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.ERROR)
 
 
 _tcf_help = """\
-Usage: riscv64-snps-elf-tcf-gcc [-tcf=<TCF path>] [-tcf-debug]
-                                [-tcf-no-compressed] [-tcf-no-memory]
-                                [-tcf-help] [-tcf-buildlib=<path>]
-                                [<GCC options>]
+Usage: riscv64-gf-elf-tcf-gcc [-tcf=<TCF path>] [-tcf-debug]
+                              [-tcf-no-compressed] [-tcf-no-memory]
+                              [-tcf-help] [-tcf-buildlib=<path>]
+                              [<GCC options>]
 
 Description of available options:
 

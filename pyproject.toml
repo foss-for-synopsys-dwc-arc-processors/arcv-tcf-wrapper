@@ -3,8 +3,8 @@ target-version = ['py38']
 line-length = 150
 include = '''
 (
-  riscv64-snps-elf-tcf-gcc
-  | riscv64-snps-elf-buildlib
+  riscv64-gf-elf-tcf-gcc
+  | riscv64-gf-elf-buildlib
   | arcgnulib.py
 )
 '''
